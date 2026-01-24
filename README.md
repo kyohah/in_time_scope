@@ -20,12 +20,13 @@ gem install in_time_scope
 
 ## Usage
 
-### Basic
-#### null 許可の場合 shibaraku と同じ使い方ができる
+### Basic: Nullable Time Window
+Use the defaults (`start_at` / `end_at`) even when the columns allow `NULL`.
+
 ```ruby
 create_table :events do |t|
-  t.datetime :start_at, null: true # null が可能なとき
-  t.datetime :end_at, null: true   # null が可能なとき
+  t.datetime :start_at, null: true
+  t.datetime :end_at, null: true
 
   t.timestamps
 end
@@ -33,7 +34,7 @@ end
 class Event < ActiveRecord::Base
   include InTimeScope
 
-  # デフォルトは、start_at / end_at カラムを使用
+  # Uses start_at / end_at by default
   in_time_scope
 end
 
@@ -41,49 +42,141 @@ Event.in_time
 # => SELECT "events".* FROM "events" WHERE ("events"."start_at" IS NULL OR "events"."start_at" <= '2026-01-24 19:50:05.738232') AND ("events"."end_at" IS NULL OR "events"."end_at" > '2026-01-24 19:50:05.738232') /* loading for pp */ LIMIT $1  [["LIMIT", 11]]
 
 # Check at a specific time
-Event.in_time(Time.parse('2024-06-01 12:00:00'))
+Event.in_time(Time.parse("2024-06-01 12:00:00"))
 # => SELECT "events".* FROM "events" WHERE ("events"."start_at" IS NULL OR "events"."start_at" <= '2024-06-01 12:00:00.000000') AND ("events"."end_at" IS NULL OR "events"."end_at" > '2024-06-01 12:00:00.000000') /* loading for pp */ LIMIT $1  [["LIMIT", 11]]
 
-# 現在の時刻がその期間内かどうかをチェック
+# Is the current time within the window?
 event = Event.first
 event.in_time?
 #=> true or false
 
-# その期間が有効かどうかをチェック
-event.in_time?(Time.parse('2024-06-01 12:00:00'))
+# Check any arbitrary timestamp
+event.in_time?(Time.parse("2024-06-01 12:00:00"))
 #=> true or false
 ```
 
-#### null 不可の場合
+### Basic: Non-Nullable Time Window
+When both timestamps are required (no `NULL`s), the generated query is simpler and faster.
+
 ```ruby
 create_table :events do |t|
-  t.datetime :start_at, null: false # null 不可のとき
-  t.datetime :end_at, null: false   # null 不可のとき
+  t.datetime :start_at, null: false
+  t.datetime :end_at, null: false
 
   t.timestamps
 end
 
-class Event < ActiveRecord::Base
-  include InTimeScope
-
-  in_time_scope start_at: { null: false }, end_at: { null: false }
-end
-
-# SQLのパフォーマンスが向上
+# Column metadata is read when Rails boots; SQL is optimized for NOT NULL columns.
 Event.in_time
 # => SELECT "events".* FROM "events" WHERE ("events"."start_at" <= '2026-01-24 19:50:05.738232') AND ("events"."end_at" > '2026-01-24 19:50:05.738232') /* loading for pp */ LIMIT $1  [["LIMIT", 11]]
 
 # Check at a specific time
-Event.in_time(Time.parse('2024-06-01 12:00:00'))
+Event.in_time(Time.parse("2024-06-01 12:00:00"))
 # => SELECT "events".* FROM "events" WHERE ("events"."start_at" <= '2024-06-01 12:00:00.000000') AND ("events"."end_at" > '2024-06-01 12:00:00.000000') /* loading for pp */ LIMIT $1  [["LIMIT", 11]]
+
+class Event < ActiveRecord::Base
+  include InTimeScope
+
+  # Explicitly mark columns as NOT NULL (even if the DB allows NULL)
+  in_time_scope start_at: { null: false }, end_at: { null: false }
+end
 ```
 
-### Other options
+### Options Reference
+Use these options in `in_time_scope` to customize column behavior.
+
+| Option | Applies to | Type | Default | Description | Example |
+| --- | --- | --- | --- | --- | --- |
+| `:scope_name` (1st arg) | in_time | `Symbol` | `:in_time` | Creates a named scope like `published_in_time` | `in_time_scope :published` |
+| `start_at: { column: ... }` | start_at | `Symbol` / `nil` | `:start_at` (or `:"<scope>_start_at"` when `:scope_name` is set) | Use a custom column name; set `nil` to disable `start_at` | `start_at: { column: :available_at }` |
+| `end_at: { column: ... }` | end_at | `Symbol` / `nil` | `:end_at` (or `:"<scope>_end_at"` when `:scope_name` is set) | Use a custom column name; set `nil` to disable `end_at` | `end_at: { column: nil }` |
+| `start_at: { null: ... }` | start_at | `true/false` | auto (schema) | Force NULL-aware vs NOT NULL behavior | `start_at: { null: false }` |
+| `end_at: { null: ... }` | end_at | `true/false` | auto (schema) | Force NULL-aware vs NOT NULL behavior | `end_at: { null: true }` |
+
+### Alternative: Start-Only History (No `end_at`)
+Use this when periods never overlap and you want exactly one "current" row.
+
+Assumptions:
+- `start_at` is always present
+- periods never overlap (validated)
+- the latest row is the current one
+
+If your table still has an `end_at` column but you want to ignore it, disable it via options:
+
+```ruby
+class Event < ActiveRecord::Base
+  include InTimeScope
+
+  # Ignore end_at even if the column exists
+  in_time_scope start_at: { null: false }, end_at: { column: nil }
+end
+
+Event.in_time(Time.parse("2024-06-01 12:00:00"))
+# => SELECT "events".* FROM "events" WHERE ("events"."start_at" <= '2024-06-01 12:00:00.000000') ORDER BY "events"."start_at" DESC LIMIT $1  [["LIMIT", 1]]
+```
+
+With no `end_at`, each row implicitly ends at the next row's `start_at`.
+To fetch the current row:
+
+```sql
+SELECT *
+FROM events
+WHERE start_at <= NOW()
+ORDER BY start_at DESC
+LIMIT 1;
+```
+
+Boundary behavior is stable:
+- `start_at <= NOW()` picks the newest row whose start has passed
+
+Recommended index:
+
+```sql
+CREATE INDEX index_events_on_start_at ON events (start_at);
+```
+
+### Alternative: End-Only Expiration (No `start_at`)
+Use this when a record is active immediately and expires at `end_at`.
+
+Assumptions:
+- `start_at` is not used (implicit "always active")
+- `end_at` can be `NULL` for "never expires"
+
+If your table still has a `start_at` column but you want to ignore it, disable it via options:
+
+```ruby
+class Event < ActiveRecord::Base
+  include InTimeScope
+
+  # Ignore start_at and only use end_at
+  in_time_scope start_at: { column: nil }, end_at: { null: true }
+end
+
+Event.in_time(Time.parse("2024-06-01 12:00:00"))
+# => SELECT "events".* FROM "events" WHERE ("events"."end_at" IS NULL OR "events"."end_at" > '2024-06-01 12:00:00.000000') /* loading for pp */ LIMIT $1  [["LIMIT", 11]]
+```
+
+To fetch active rows:
+
+```sql
+SELECT *
+FROM events
+WHERE end_at IS NULL OR end_at > NOW();
+```
+
+Recommended index:
+
+```sql
+CREATE INDEX index_events_on_end_at ON events (end_at);
+```
+
+### Advanced: Custom Columns and Multiple Scopes
+Customize which columns are used and define more than one time window per model.
 
 ```ruby
 create_table :events do |t|
   t.datetime :available_at, null: true
-  t.datetime :erchived_at, null: true
+  t.datetime :expired_at, null: true
   t.datetime :publish_start_at, null: false
   t.datetime :publish_end_at, null: false
 
@@ -93,19 +186,38 @@ end
 class Event < ActiveRecord::Base
   include InTimeScope
 
-  # change column name
-  in_time_scope start_at: { column: :available_at }, end_at: { column: :erchived_at }
+  # Use different column names
+  in_time_scope start_at: { column: :available_at }, end_at: { column: :expired_at }
 
-  # scopeを複数作成できる
+  # Define an additional scope
   in_time_scope :published, start_at: { column: :publish_start_at, null: false }, end_at: { column: :publish_end_at, null: false }
 end
-```
 
 Event.in_time
-# => uses available_at / erchived_at
+# => uses available_at / expired_at
 
 Event.published_in_time
 # => uses publish_start_at / publish_end_at
+```
+
+### Note: `has_one` with `includes` and Ordering
+`order` scopes may be ignored when used with `has_many` + `includes`, which can lead to
+`has_one` returning the wrong row. A reliable workaround is to select the latest row
+with a subquery instead of relying on `order ... limit 1`.
+
+```ruby
+class Event < ActiveRecord::Base
+  include InTimeScope
+
+  in_time_scope :in_time, start_at: { column: :start_at, null: false }, end_at: { column: nil }
+end
+
+class User < ActiveRecord::Base
+  has_many :events
+  has_one :latest_in_time_event,
+          -> { where(id: Event.group(:user_id).select('MAX(start_at)')) },
+          class_name: "Event"
+end
 ```
 
 ## Development
