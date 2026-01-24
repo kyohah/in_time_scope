@@ -112,19 +112,17 @@ class Event < ActiveRecord::Base
 end
 
 Event.in_time(Time.parse("2024-06-01 12:00:00"))
-# => SELECT "events".* FROM "events" WHERE ("events"."start_at" <= '2024-06-01 12:00:00.000000') ORDER BY "events"."start_at" DESC LIMIT $1  [["LIMIT", 1]]
+# => SELECT "events".* FROM "events" WHERE "events"."start_at" <= '2024-06-01 12:00:00.000000' ORDER BY "events"."start_at" DESC
+
+# Use .first to get the most recent single record
+Event.in_time.first
+# => SELECT "events".* FROM "events" WHERE "events"."start_at" <= '...' ORDER BY "events"."start_at" DESC LIMIT 1
 ```
 
 With no `end_at`, each row implicitly ends at the next row's `start_at`.
-To fetch the current row:
-
-```sql
-SELECT *
-FROM events
-WHERE start_at <= NOW()
-ORDER BY start_at DESC
-LIMIT 1;
-```
+The scope returns all matching records ordered by `start_at DESC`, so:
+- Use `.first` for a single record
+- Use with `has_one` associations for per-parent record selection
 
 Boundary behavior is stable:
 - `start_at <= NOW()` picks the newest row whose start has passed
@@ -200,25 +198,57 @@ Event.published_in_time
 # => uses publish_start_at / publish_end_at
 ```
 
-### Note: `has_one` with `includes` and Ordering
-`order` scopes may be ignored when used with `has_many` + `includes`, which can lead to
-`has_one` returning the wrong row. A reliable workaround is to select the latest row
-with a subquery instead of relying on `order ... limit 1`.
+### Using with `has_one` Associations
+
+The start-only pattern provides two scopes for `has_one` associations:
+
+#### Simple approach: `in_time` + `order`
+
+`in_time` provides WHERE only. Add `order` externally:
 
 ```ruby
-class Event < ActiveRecord::Base
+class Price < ActiveRecord::Base
   include InTimeScope
+  belongs_to :user
 
-  in_time_scope :in_time, start_at: { column: :start_at, null: false }, end_at: { column: nil }
+  in_time_scope start_at: { null: false }, end_at: { column: nil }
 end
 
 class User < ActiveRecord::Base
-  has_many :events
-  has_one :latest_in_time_event,
-          -> { where(id: Event.group(:user_id).select('MAX(start_at)')) },
-          class_name: "Event"
+  has_many :prices
+
+  # in_time is WHERE only, add order externally
+  has_one :current_price,
+          -> { in_time.order(start_at: :desc) },
+          class_name: "Price"
 end
 ```
+
+This works but loads all matching records into memory when using `includes`.
+
+#### Efficient approach: `latest_in_time` (NOT EXISTS) - Recommended
+
+```ruby
+class User < ActiveRecord::Base
+  has_many :prices
+
+  # Uses NOT EXISTS subquery - only loads the latest record per user
+  has_one :current_price,
+          -> { latest_in_time(:user_id) },
+          class_name: "Price"
+end
+
+# Direct access
+user.current_price
+# => Returns the most recent price where start_at <= Time.current
+
+# Efficient with includes (only fetches latest record per user from DB)
+User.includes(:current_price).each do |user|
+  puts user.current_price&.amount
+end
+```
+
+The `latest_in_time(:foreign_key)` scope uses a `NOT EXISTS` subquery to filter at the database level, avoiding loading unnecessary records into memory.
 
 ## Development
 

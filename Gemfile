@@ -4,8 +4,3 @@ source "https://rubygems.org"
 
 # Specify your gem's dependencies in in_time_scope.gemspec
 gemspec
-
-gem "irb"
-gem "rake", "~> 13.0"
-
-gem "rubocop", "~> 1.21"
