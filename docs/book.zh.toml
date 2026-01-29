@@ -2,7 +2,6 @@
 title = "InTimeScope"
 authors = ["kyohah"]
 language = "zh"
-multilingual = false
 src = "zh"
 
 [build]
