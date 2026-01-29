@@ -2,6 +2,17 @@
 
 A Ruby gem that adds time-window scopes to ActiveRecord models. It provides a convenient way to query records that fall within specific time periods (between `start_at` and `end_at` timestamps), with support for nullable columns, custom column names, and multiple scopes per model.
 
+## Motivation
+
+This gem is inspired by [onk/shibaraku](https://github.com/onk/shibaraku). While shibaraku is a great gem, I wanted to extend it with additional features:
+
+- **Nullable column handling**: shibaraku generates SQL with `OR` conditions when columns allow `NULL`, which can impact query performance. InTimeScope auto-detects column nullability from the schema and generates optimized queries.
+- **Named scopes**: shibaraku only provides `in_time` method. InTimeScope allows multiple named scopes like `in_time_published`, `in_time_featured` per model.
+- **Start-only / End-only patterns**: Support for versioned records (start_at only, no end_at) and expiration patterns (end_at only, no start_at).
+- **has_one association support**: `latest_in_time` and `earliest_in_time` scopes optimized for `has_one` with `includes`, using NOT EXISTS subqueries.
+
+These features required significant architectural changes, so I created a new gem rather than extending shibaraku.
+
 ## Installation
 
 Install the gem and add to the application's Gemfile by executing:
