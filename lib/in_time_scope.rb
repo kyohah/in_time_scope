@@ -15,19 +15,18 @@ module InTimeScope
       scope_name ||= :in_time
       scope_prefix = scope_name == :in_time ? "" : "#{scope_name}_"
 
-      start_config = normalize_config(start_at, :"#{scope_prefix}start_at", :start_at)
-      end_config = normalize_config(end_at, :"#{scope_prefix}end_at", :end_at)
+      start_config = normalize_config(start_at, :"#{scope_prefix}start_at")
+      end_config = normalize_config(end_at, :"#{scope_prefix}end_at")
 
       define_scope_methods(scope_name, start_config, end_config, prefix)
     end
 
     private
 
-    def normalize_config(config, default_column, fallback_column)
+    def normalize_config(config, default_column)
       return { column: nil, null: true } if config[:column].nil? && config.key?(:column)
 
       column = config[:column] || default_column
-      column = fallback_column unless column_names.include?(column.to_s)
       column = nil unless column_names.include?(column.to_s)
 
       null = config.key?(:null) ? config[:null] : column_nullable?(column)
