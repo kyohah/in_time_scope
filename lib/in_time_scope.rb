@@ -8,7 +8,8 @@ require_relative "in_time_scope/version"
 # It allows you to easily query records that fall within specific time periods,
 # with support for nullable columns, custom column names, and multiple scopes per model.
 #
-# @example Basic usage with nullable columns
+# == Basic usage with nullable columns
+#
 #   class Event < ActiveRecord::Base
 #     include InTimeScope
 #     in_time_scope
@@ -18,87 +19,100 @@ require_relative "in_time_scope/version"
 #   Event.in_time(some_time)         # Records active at specific time
 #   event.in_time?                   # Check if record is active now
 #
-# @example Start-only pattern (history tracking)
+# == Start-only pattern (history tracking)
+#
 #   class Price < ActiveRecord::Base
 #     include InTimeScope
 #     in_time_scope start_at: { null: false }, end_at: { column: nil }
 #   end
 #
-# @example End-only pattern (expiration)
+# == End-only pattern (expiration)
+#
 #   class Coupon < ActiveRecord::Base
 #     include InTimeScope
 #     in_time_scope start_at: { column: nil }, end_at: { null: false }
 #   end
 #
-# @see ClassMethods#in_time_scope
+# See ClassMethods#in_time_scope for detailed configuration options.
 module InTimeScope
-  # Base error class for InTimeScope errors
+  # Base error class for InTimeScope errors.
   class Error < StandardError; end
 
-  # Raised when a specified column does not exist on the table
-  # @note This error is raised at class load time
+  # Raised when a specified column does not exist on the table.
+  #
+  # This error is raised at class load time when +in_time_scope+ is called.
   class ColumnNotFoundError < Error; end
 
-  # Raised when the scope configuration is invalid
-  # @note This error is raised when the scope or instance method is called
+  # Raised when the scope configuration is invalid.
+  #
+  # This error is raised when the scope or instance method is called,
+  # not at class load time.
   class ConfigurationError < Error; end
 
-  # Hook called when InTimeScope is included in a model
-  #
-  # @param model [Class] The ActiveRecord model class
-  # @return [void]
-  # @api private
-  def self.included(model)
+  def self.included(model) # :nodoc:
     model.extend ClassMethods
   end
 
-  # Class methods added to ActiveRecord models when InTimeScope is included
+  # Class methods added to ActiveRecord models when InTimeScope is included.
   module ClassMethods
     # Defines time-window scopes for the model.
     #
     # This method creates both a class-level scope and an instance method
     # to check if records fall within a specified time window.
     #
-    # @param scope_name [Symbol] The name of the scope (default: :in_time)
-    #   When not :in_time, columns default to `<scope_name>_start_at` and `<scope_name>_end_at`
+    # == Parameters
     #
-    # @param start_at [Hash] Configuration for the start column
-    # @option start_at [Symbol, nil] :column Column name (nil to disable start boundary)
-    # @option start_at [Boolean] :null Whether the column allows NULL values
-    #   (auto-detected from schema if not specified)
+    # +scope_name+::
+    #   Symbol - The name of the scope (default: +:in_time+).
+    #   When not +:in_time+, columns default to +<scope_name>_start_at+ and +<scope_name>_end_at+.
     #
-    # @param end_at [Hash] Configuration for the end column
-    # @option end_at [Symbol, nil] :column Column name (nil to disable end boundary)
-    # @option end_at [Boolean] :null Whether the column allows NULL values
-    #   (auto-detected from schema if not specified)
+    # +start_at+::
+    #   Hash - Configuration for the start column.
+    #   - +:column+ - Symbol or nil. Column name (nil to disable start boundary).
+    #   - +:null+ - Boolean. Whether the column allows NULL values (auto-detected from schema if not specified).
     #
-    # @param prefix [Boolean] If true, creates `<scope_name>_in_time` instead of `in_time_<scope_name>`
+    # +end_at+::
+    #   Hash - Configuration for the end column.
+    #   - +:column+ - Symbol or nil. Column name (nil to disable end boundary).
+    #   - +:null+ - Boolean. Whether the column allows NULL values (auto-detected from schema if not specified).
     #
-    # @raise [ColumnNotFoundError] When a specified column doesn't exist (at class load time)
-    # @raise [ConfigurationError] When both columns are nil, or when using start-only/end-only
-    #   pattern with a nullable column (at scope call time)
+    # +prefix+::
+    #   Boolean - If true, creates +<scope_name>_in_time+ instead of +in_time_<scope_name>+.
     #
-    # @example Default scope with nullable columns
+    # == Errors
+    #
+    # Raises ColumnNotFoundError when a specified column doesn't exist (at class load time).
+    #
+    # Raises ConfigurationError when both columns are nil, or when using start-only/end-only
+    # pattern with a nullable column (at scope call time).
+    #
+    # == Examples
+    #
+    # Default scope with nullable columns:
+    #
     #   in_time_scope
     #   # Creates: Model.in_time, model.in_time?
     #
-    # @example Named scope
+    # Named scope:
+    #
     #   in_time_scope :published
     #   # Creates: Model.in_time_published, model.in_time_published?
     #   # Uses: published_start_at, published_end_at columns
     #
-    # @example Custom columns
+    # Custom columns:
+    #
     #   in_time_scope start_at: { column: :available_at }, end_at: { column: :expired_at }
     #
-    # @example Start-only pattern (for history tracking)
+    # Start-only pattern (for history tracking):
+    #
     #   in_time_scope start_at: { null: false }, end_at: { column: nil }
     #   # Also creates: Model.latest_in_time(:foreign_key), Model.earliest_in_time(:foreign_key)
     #
-    # @example End-only pattern (for expiration)
+    # End-only pattern (for expiration):
+    #
     #   in_time_scope start_at: { column: nil }, end_at: { null: false }
     #   # Also creates: Model.latest_in_time(:foreign_key), Model.earliest_in_time(:foreign_key)
     #
-    # @return [void]
     def in_time_scope(scope_name = :in_time, start_at: {}, end_at: {}, prefix: false)
       table_column_hash = columns_hash
       time_column_prefix = scope_name == :in_time ? "" : "#{scope_name}_"
