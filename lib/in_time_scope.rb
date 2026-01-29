@@ -47,38 +47,47 @@ module InTimeScope
     end
 
     def define_scope_methods(scope_method_name, start_at_column:, start_at_null:, end_at_column:, end_at_null:)
-      # Define class-level scope
+      # Define class-level scope and instance method
       if start_at_column.nil? && end_at_column.nil?
-        scope scope_method_name, ->(_time = Time.current) {
-          raise InTimeScope::ConfigurationError, "At least one of start_at or end_at must be specified"
-        }
+        define_error_scope_and_method(scope_method_name,
+                                      "At least one of start_at or end_at must be specified")
       elsif end_at_column.nil?
         # Start-only pattern (history tracking) - requires non-nullable column
         if start_at_null
-          scope scope_method_name, ->(_time = Time.current) {
-            raise InTimeScope::ConfigurationError,
-                  "Start-only pattern requires non-nullable column. Set `start_at: { null: false }` or add an end_at column"
-          }
+          define_error_scope_and_method(scope_method_name,
+                                        "Start-only pattern requires non-nullable column. " \
+                                        "Set `start_at: { null: false }` or add an end_at column")
         else
           define_start_only_scope(scope_method_name, start_at_column)
+          define_instance_method(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
         end
       elsif start_at_column.nil?
         # End-only pattern (expiration) - requires non-nullable column
         if end_at_null
-          scope scope_method_name, ->(_time = Time.current) {
-            raise InTimeScope::ConfigurationError,
-                  "End-only pattern requires non-nullable column. Set `end_at: { null: false }` or add a start_at column"
-          }
+          define_error_scope_and_method(scope_method_name,
+                                        "End-only pattern requires non-nullable column. " \
+                                        "Set `end_at: { null: false }` or add a start_at column")
         else
           define_end_only_scope(scope_method_name, end_at_column)
+          define_instance_method(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
         end
       else
         # Both start and end
         define_full_scope(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
+        define_instance_method(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
       end
+    end
 
-      # Define instance method
-      define_instance_method(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
+    def define_error_scope_and_method(scope_method_name, message)
+      err_message = message
+
+      scope scope_method_name, ->(_time = Time.current) {
+        raise InTimeScope::ConfigurationError, err_message
+      }
+
+      define_method("#{scope_method_name}?") do |_time = Time.current|
+        raise InTimeScope::ConfigurationError, err_message
+      end
     end
 
     def define_start_only_scope(scope_method_name, column)
