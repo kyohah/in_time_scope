@@ -295,15 +295,15 @@ module InTimeScope
 
     # Defines the instance method to check if a record is within the time window
     #
-    # @param scope_method_name [Symbol] The name of the scope method
+    # @param suffix [String] The suffix for method names
     # @param start_column [Symbol, nil] The start column name
     # @param start_null [Boolean, nil] Whether start column allows NULL
     # @param end_column [Symbol, nil] The end column name
     # @param end_null [Boolean, nil] Whether end column allows NULL
     # @return [void]
     # @api private
-    def define_instance_method(scope_method_name, start_column, start_null, end_column, end_null)
-      define_method("#{scope_method_name}?") do |time = Time.current|
+    def define_instance_method(suffix, start_column, start_null, end_column, end_null)
+      define_method("in_time#{suffix}?") do |time = Time.current|
         start_ok = if start_column.nil?
                      true
                    elsif start_null
@@ -326,22 +326,20 @@ module InTimeScope
 
     # Defines before_in_time scope (records not yet started: start_at > time)
     #
-    # @param scope_method_name [Symbol] The base scope method name
+    # @param suffix [String] The suffix for method names
     # @param start_column [Symbol, nil] The start column name
     # @param start_null [Boolean, nil] Whether start column allows NULL
     # @return [void]
     # @api private
-    def define_before_scope(scope_method_name, start_column, start_null)
-      before_method_name = inverse_method_name(:before, scope_method_name)
-
+    def define_before_scope(suffix, start_column, start_null)
       # No start column means always started (never before)
       # start_at > time means not yet started
       # NULL start_at is treated as "already started" (not before)
-      scope before_method_name, ->(time = Time.current) {
+      scope :"before_in_time#{suffix}", ->(time = Time.current) {
         start_column.nil? ? none : where.not(start_column => ..time)
       }
 
-      define_method("#{before_method_name}?") do |time = Time.current|
+      define_method("before_in_time#{suffix}?") do |time = Time.current|
         return false if start_column.nil?
 
         val = send(start_column)
@@ -353,22 +351,20 @@ module InTimeScope
 
     # Defines after_in_time scope (records already ended: end_at <= time)
     #
-    # @param scope_method_name [Symbol] The base scope method name
+    # @param suffix [String] The suffix for method names
     # @param end_column [Symbol, nil] The end column name
     # @param end_null [Boolean, nil] Whether end column allows NULL
     # @return [void]
     # @api private
-    def define_after_scope(scope_method_name, end_column, end_null)
-      after_method_name = inverse_method_name(:after, scope_method_name)
-
+    def define_after_scope(suffix, end_column, end_null)
       # No end column means never ends (never after)
       # end_at <= time means already ended
       # NULL end_at is treated as "never ends" (not after)
-      scope after_method_name, ->(time = Time.current) {
+      scope :"after_in_time#{suffix}", ->(time = Time.current) {
         end_column.nil? ? none : where(end_column => ..time)
       }
 
-      define_method("#{after_method_name}?") do |time = Time.current|
+      define_method("after_in_time#{suffix}?") do |time = Time.current|
         return false if end_column.nil?
 
         val = send(end_column)
@@ -380,37 +376,17 @@ module InTimeScope
 
     # Defines out_of_time scope (records outside time window: before OR after)
     #
-    # @param scope_method_name [Symbol] The base scope method name
+    # @param suffix [String] The suffix for method names
     # @return [void]
     # @api private
-    def define_out_of_time_scope(scope_method_name)
-      out_method_name = inverse_method_name(:out_of, scope_method_name)
-      before_method_name = inverse_method_name(:before, scope_method_name)
-      after_method_name = inverse_method_name(:after, scope_method_name)
-
+    def define_out_of_time_scope(suffix)
       # out_of_time = before_in_time OR after_in_time
-      scope out_method_name, ->(time = Time.current) {
-        send(before_method_name, time).or(send(after_method_name, time))
+      scope :"out_of_time#{suffix}", ->(time = Time.current) {
+        send(:"before_in_time#{suffix}", time).or(send(:"after_in_time#{suffix}", time))
       }
 
-      define_method("#{out_method_name}?") do |time = Time.current|
-        send("#{before_method_name}?", time) || send("#{after_method_name}?", time)
-      end
-    end
-
-    # Generates the method name for inverse scopes
-    #
-    # @param prefix [Symbol] The prefix (:before, :after, :out_of)
-    # @param scope_method_name [Symbol] The base scope method name
-    # @return [Symbol] The generated method name
-    # @api private
-    def inverse_method_name(prefix, scope_method_name)
-      if scope_method_name == :in_time
-        # out_of -> out_of_time, before -> before_in_time, after -> after_in_time
-        prefix == :out_of ? :out_of_time : :"#{prefix}_in_time"
-      else
-        # in_time_published -> before_in_time_published, out_of_time_published
-        prefix == :out_of ? :"out_of_time_#{scope_method_name.to_s.sub("in_time_", "")}" : :"#{prefix}_#{scope_method_name}"
+      define_method("out_of_time#{suffix}?") do |time = Time.current|
+        send("before_in_time#{suffix}?", time) || send("after_in_time#{suffix}?", time)
       end
     end
   end

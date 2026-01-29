@@ -25,7 +25,7 @@ Gemfile.lock
 **/.claude/CLAUDE.local.md
 **/.claude/memories/
 **/.claude/rules/
-# **/.claude/commands/  # Tracked for rulesync commands
+**/.claude/commands/
 **/.claude/agents/
 **/.claude/skills/
 **/.claude/settings.local.json

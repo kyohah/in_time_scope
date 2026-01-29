@@ -144,13 +144,13 @@ Article.out_of_time_published     # Not currently published
 
 ## Options Reference
 
-| Option | Description | Example |
-| --- | --- | --- |
-| `scope_name` (1st arg) | Named scope like `in_time_published` | `in_time_scope :published` |
-| `start_at: { column: }` | Custom column name, `nil` to disable | `start_at: { column: :available_at }` |
-| `end_at: { column: }` | Custom column name, `nil` to disable | `end_at: { column: nil }` |
-| `start_at: { null: }` | Force NULL handling | `start_at: { null: false }` |
-| `end_at: { null: }` | Force NULL handling | `end_at: { null: true }` |
+| Option | Default | Description | Example |
+| --- | --- | --- | --- |
+| `scope_name` (1st arg) | `:in_time` | Named scope like `in_time_published` | `in_time_scope :published` |
+| `start_at: { column: }` | `:start_at` | Custom column name, `nil` to disable | `start_at: { column: :available_at }` |
+| `end_at: { column: }` | `:end_at` | Custom column name, `nil` to disable | `end_at: { column: nil }` |
+| `start_at: { null: }` | auto-detect | Force NULL handling | `start_at: { null: false }` |
+| `end_at: { null: }` | auto-detect | Force NULL handling | `end_at: { null: true }` |
 
 ## Acknowledgements
 
