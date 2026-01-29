@@ -33,58 +33,51 @@ require_relative "in_time_scope/version"
 #     in_time_scope start_at: { column: nil }, end_at: { null: false }
 #   end
 #
-# See ClassMethods#in_time_scope for detailed configuration options.
+# @see ClassMethods#in_time_scope
 module InTimeScope
-  # Base error class for InTimeScope errors.
+  # Base error class for InTimeScope errors
   class Error < StandardError; end
 
-  # Raised when a specified column does not exist on the table.
-  #
-  # This error is raised at class load time when +in_time_scope+ is called.
+  # Raised when a specified column does not exist on the table
+  # @note This error is raised at class load time
   class ColumnNotFoundError < Error; end
 
-  # Raised when the scope configuration is invalid.
-  #
-  # This error is raised when the scope or instance method is called,
-  # not at class load time.
+  # Raised when the scope configuration is invalid
+  # @note This error is raised when the scope or instance method is called
   class ConfigurationError < Error; end
 
-  def self.included(model) # :nodoc:
+  # @api private
+  def self.included(model)
     model.extend ClassMethods
   end
 
-  # Class methods added to ActiveRecord models when InTimeScope is included.
+  # Class methods added to ActiveRecord models when InTimeScope is included
   module ClassMethods
     # Defines time-window scopes for the model.
     #
     # This method creates both a class-level scope and an instance method
     # to check if records fall within a specified time window.
     #
-    # == Parameters
+    # @param scope_name [Symbol] The name of the scope (default: :in_time)
+    #   When not :in_time, columns default to +<scope_name>_start_at+ and +<scope_name>_end_at+
     #
-    # +scope_name+::
-    #   Symbol - The name of the scope (default: +:in_time+).
-    #   When not +:in_time+, columns default to +<scope_name>_start_at+ and +<scope_name>_end_at+.
+    # @param start_at [Hash] Configuration for the start column
+    # @option start_at [Symbol, nil] :column Column name (nil to disable start boundary)
+    # @option start_at [Boolean] :null Whether the column allows NULL values
+    #   (auto-detected from schema if not specified)
     #
-    # +start_at+::
-    #   Hash - Configuration for the start column.
-    #   - +:column+ - Symbol or nil. Column name (nil to disable start boundary).
-    #   - +:null+ - Boolean. Whether the column allows NULL values (auto-detected from schema if not specified).
+    # @param end_at [Hash] Configuration for the end column
+    # @option end_at [Symbol, nil] :column Column name (nil to disable end boundary)
+    # @option end_at [Boolean] :null Whether the column allows NULL values
+    #   (auto-detected from schema if not specified)
     #
-    # +end_at+::
-    #   Hash - Configuration for the end column.
-    #   - +:column+ - Symbol or nil. Column name (nil to disable end boundary).
-    #   - +:null+ - Boolean. Whether the column allows NULL values (auto-detected from schema if not specified).
+    # @param prefix [Boolean] If true, creates +<scope_name>_in_time+ instead of +in_time_<scope_name>+
     #
-    # +prefix+::
-    #   Boolean - If true, creates +<scope_name>_in_time+ instead of +in_time_<scope_name>+.
+    # @raise [ColumnNotFoundError] When a specified column doesn't exist (at class load time)
+    # @raise [ConfigurationError] When both columns are nil, or when using start-only/end-only
+    #   pattern with a nullable column (at scope call time)
     #
-    # == Errors
-    #
-    # Raises ColumnNotFoundError when a specified column doesn't exist (at class load time).
-    #
-    # Raises ConfigurationError when both columns are nil, or when using start-only/end-only
-    # pattern with a nullable column (at scope call time).
+    # @return [void]
     #
     # == Examples
     #
