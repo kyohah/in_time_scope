@@ -123,7 +123,7 @@ RSpec.describe InTimeScope do
   end
 
   describe "Multiple Scopes (Article)" do
-    describe ".in_time and .published_in_time" do
+    describe ".in_time and .in_time_published" do
       it "has separate scopes with different columns" do
         article = Article.create!(
           start_at: past,
@@ -133,7 +133,7 @@ RSpec.describe InTimeScope do
         )
 
         expect(Article.in_time(now)).to include(article)
-        expect(Article.published_in_time(now)).to include(article)
+        expect(Article.in_time_published(now)).to include(article)
       end
 
       it "scopes work independently" do
@@ -145,11 +145,11 @@ RSpec.describe InTimeScope do
         )
 
         expect(Article.in_time(now)).to include(visible_not_published)
-        expect(Article.published_in_time(now)).not_to include(visible_not_published)
+        expect(Article.in_time_published(now)).not_to include(visible_not_published)
       end
     end
 
-    describe "#in_time? and #published_in_time?" do
+    describe "#in_time? and #in_time_published?" do
       it "has separate instance methods" do
         article = Article.create!(
           start_at: past,
@@ -159,7 +159,7 @@ RSpec.describe InTimeScope do
         )
 
         expect(article.in_time?(now)).to be true
-        expect(article.published_in_time?(now)).to be false
+        expect(article.in_time_published?(now)).to be false
       end
     end
   end

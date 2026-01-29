@@ -87,11 +87,12 @@ Use these options in `in_time_scope` to customize column behavior.
 
 | Option | Applies to | Type | Default | Description | Example |
 | --- | --- | --- | --- | --- | --- |
-| `:scope_name` (1st arg) | in_time | `Symbol` | `:in_time` | Creates a named scope like `published_in_time` | `in_time_scope :published` |
+| `:scope_name` (1st arg) | in_time | `Symbol` | `:in_time` | Creates a named scope like `in_time_published` | `in_time_scope :published` |
 | `start_at: { column: ... }` | start_at | `Symbol` / `nil` | `:start_at` (or `:"<scope>_start_at"` when `:scope_name` is set) | Use a custom column name; set `nil` to disable `start_at` | `start_at: { column: :available_at }` |
 | `end_at: { column: ... }` | end_at | `Symbol` / `nil` | `:end_at` (or `:"<scope>_end_at"` when `:scope_name` is set) | Use a custom column name; set `nil` to disable `end_at` | `end_at: { column: nil }` |
 | `start_at: { null: ... }` | start_at | `true/false` | auto (schema) | Force NULL-aware vs NOT NULL behavior | `start_at: { null: false }` |
 | `end_at: { null: ... }` | end_at | `true/false` | auto (schema) | Force NULL-aware vs NOT NULL behavior | `end_at: { null: true }` |
+| `prefix: true` | scope_name | `true/false` | `false` | Use prefix style method name like `published_in_time` instead of `in_time_published` | `in_time_scope :published, prefix: true` |
 
 ### Alternative: Start-Only History (No `end_at`)
 Use this when periods never overlap and you want exactly one "current" row.
@@ -175,8 +176,8 @@ Customize which columns are used and define more than one time window per model.
 create_table :events do |t|
   t.datetime :available_at, null: true
   t.datetime :expired_at, null: true
-  t.datetime :publish_start_at, null: false
-  t.datetime :publish_end_at, null: false
+  t.datetime :published_start_at, null: false
+  t.datetime :published_end_at, null: false
 
   t.timestamps
 end
@@ -187,15 +188,30 @@ class Event < ActiveRecord::Base
   # Use different column names
   in_time_scope start_at: { column: :available_at }, end_at: { column: :expired_at }
 
-  # Define an additional scope
-  in_time_scope :published, start_at: { column: :publish_start_at, null: false }, end_at: { column: :publish_end_at, null: false }
+  # Define an additional scope - uses published_start_at / published_end_at by default
+  in_time_scope :published
 end
 
 Event.in_time
 # => uses available_at / expired_at
 
+Event.in_time_published
+# => uses published_start_at / published_end_at
+```
+
+### Using `prefix: true` Option
+Use the `prefix: true` option if you prefer the scope name as a prefix instead of suffix.
+
+```ruby
+class Event < ActiveRecord::Base
+  include InTimeScope
+
+  # With prefix: true, the method name becomes published_in_time instead of in_time_published
+  in_time_scope :published, prefix: true
+end
+
 Event.published_in_time
-# => uses publish_start_at / publish_end_at
+# => uses published_start_at / published_end_at
 ```
 
 ### Using with `has_one` Associations

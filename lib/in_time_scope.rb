@@ -11,14 +11,14 @@ module InTimeScope
   end
 
   module ClassMethods
-    def in_time_scope(scope_name = nil, start_at: {}, end_at: {})
+    def in_time_scope(scope_name = nil, start_at: {}, end_at: {}, prefix: false)
       scope_name ||= :in_time
-      scope_suffix = scope_name == :in_time ? "" : "_#{scope_name}"
+      scope_prefix = scope_name == :in_time ? "" : "#{scope_name}_"
 
-      start_config = normalize_config(start_at, :"start_at#{scope_suffix}", :start_at)
-      end_config = normalize_config(end_at, :"end_at#{scope_suffix}", :end_at)
+      start_config = normalize_config(start_at, :"#{scope_prefix}start_at", :start_at)
+      end_config = normalize_config(end_at, :"#{scope_prefix}end_at", :end_at)
 
-      define_scope_methods(scope_name, start_config, end_config)
+      define_scope_methods(scope_name, start_config, end_config, prefix)
     end
 
     private
@@ -42,8 +42,14 @@ module InTimeScope
       col ? col.null : true
     end
 
-    def define_scope_methods(scope_name, start_config, end_config)
-      method_name = scope_name == :in_time ? :in_time : :"#{scope_name}_in_time"
+    def define_scope_methods(scope_name, start_config, end_config, prefix)
+      method_name = if scope_name == :in_time
+                      :in_time
+                    elsif prefix
+                      :"#{scope_name}_in_time"
+                    else
+                      :"in_time_#{scope_name}"
+                    end
       instance_method_name = :"#{method_name}?"
 
       start_column = start_config[:column]
@@ -89,7 +95,7 @@ module InTimeScope
     end
 
     def define_latest_scope(method_name, start_column, start_null)
-      latest_method_name = method_name == :in_time ? :latest_in_time : :"latest_#{method_name}_in_time"
+      latest_method_name = method_name == :in_time ? :latest_in_time : :"latest_#{method_name}"
       tbl = table_name
       col = start_column
 
