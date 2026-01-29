@@ -1,31 +1,30 @@
 ---
 targets:
   - claudecode
-description: Translate README.md and docs into multiple languages (ja, zh, fr, de)
+description: Translate README.md and sync docs for all languages (ja, zh, fr, de)
 ---
 
 # Translate Documentation
 
-Translate the README.md and documentation into multiple languages.
+Translate and sync documentation for multiple languages.
 
 ## Instructions
 
-### 1. Translate README.md
+### 1. Sync English Documentation
 
-1. Read the current README.md
-2. Create translated versions in `docs/` directory:
-   - `docs/README.ja.md` - Japanese (日本語)
-   - `docs/README.zh.md` - Chinese (中文)
-   - `docs/README.fr.md` - French (Français)
-   - `docs/README.de.md` - German (Deutsch)
+1. Read the current `README.md`
+2. Copy content to `docs/src/index.md`:
+   - Remove the language links line (`[English](README.md) | [日本語]...`)
+   - Keep everything else
 
-### 2. Translate mdBook Documentation
+### 2. Translate to Other Languages
 
-1. Find all `.md` files in the `docs/en/` directory
-2. For each file, create/update translated versions in `docs/ja/`:
-   - `docs/ja/index.md` - Japanese version of index.md
-   - `docs/ja/point-system.md` - Japanese version of point-system.md
-   - `docs/ja/user-name-history.md` - Japanese version of user-name-history.md
+For each language directory (`docs/ja/`, `docs/zh/`, `docs/fr/`, `docs/de/`):
+
+1. Translate `docs/src/index.md` to `docs/{lang}/index.md`
+2. Translate `docs/src/point-system.md` to `docs/{lang}/point-system.md`
+3. Translate `docs/src/user-name-history.md` to `docs/{lang}/user-name-history.md`
+4. Update `docs/{lang}/SUMMARY.md` with translated titles
 
 ### 3. Translation Guidelines
 
@@ -34,8 +33,14 @@ For each translation:
 - Translate all text content naturally (not literal translation)
 - Keep the same markdown structure
 - Keep URLs and links unchanged
-- Keep the language links at the top unchanged (for README only)
-- Translate code comments if they exist in text sections (not in code blocks)
-- Update SUMMARY.md for Japanese docs
+- Do NOT include language links in docs files
+- Translate headings and navigation text in SUMMARY.md
+
+### 4. Language Codes
+
+- `ja` - Japanese (日本語)
+- `zh` - Chinese (中文)
+- `fr` - French (Français)
+- `de` - German (Deutsch)
 
 $ARGUMENTS
