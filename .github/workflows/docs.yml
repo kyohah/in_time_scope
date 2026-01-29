@@ -32,16 +32,80 @@ jobs:
         run: mdbook build docs
 
       - name: Build Japanese documentation
-        run: mdbook build docs --config docs/book.ja.toml
+        run: |
+          cat > docs/book.toml << 'EOF'
+          [book]
+          title = "InTimeScope"
+          authors = ["kyohah"]
+          language = "ja"
+          src = "ja"
+
+          [build]
+          build-dir = "book/ja"
+
+          [output.html]
+          default-theme = "light"
+          preferred-dark-theme = "navy"
+          git-repository-url = "https://github.com/kyohah/in_time_scope"
+          EOF
+          mdbook build docs
 
       - name: Build Chinese documentation
-        run: mdbook build docs --config docs/book.zh.toml
+        run: |
+          cat > docs/book.toml << 'EOF'
+          [book]
+          title = "InTimeScope"
+          authors = ["kyohah"]
+          language = "zh"
+          src = "zh"
+
+          [build]
+          build-dir = "book/zh"
+
+          [output.html]
+          default-theme = "light"
+          preferred-dark-theme = "navy"
+          git-repository-url = "https://github.com/kyohah/in_time_scope"
+          EOF
+          mdbook build docs
 
       - name: Build German documentation
-        run: mdbook build docs --config docs/book.de.toml
+        run: |
+          cat > docs/book.toml << 'EOF'
+          [book]
+          title = "InTimeScope"
+          authors = ["kyohah"]
+          language = "de"
+          src = "de"
+
+          [build]
+          build-dir = "book/de"
+
+          [output.html]
+          default-theme = "light"
+          preferred-dark-theme = "navy"
+          git-repository-url = "https://github.com/kyohah/in_time_scope"
+          EOF
+          mdbook build docs
 
       - name: Build French documentation
-        run: mdbook build docs --config docs/book.fr.toml
+        run: |
+          cat > docs/book.toml << 'EOF'
+          [book]
+          title = "InTimeScope"
+          authors = ["kyohah"]
+          language = "fr"
+          src = "fr"
+
+          [build]
+          build-dir = "book/fr"
+
+          [output.html]
+          default-theme = "light"
+          preferred-dark-theme = "navy"
+          git-repository-url = "https://github.com/kyohah/in_time_scope"
+          EOF
+          mdbook build docs
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
