@@ -36,15 +36,13 @@ module InTimeScope
     # @param scope_name [Symbol] The name of the scope (default: :in_time)
     # @param start_at [Hash] Configuration for the start column
     # @param end_at [Hash] Configuration for the end column
-    # @param prefix [Boolean] If true, creates prefix-style method names
     # @return [void]
     # @raise [ColumnNotFoundError] When a specified column doesn't exist
     # @raise [ConfigurationError] When the configuration is invalid (at scope call time)
     def in_time_scope: (
       ?Symbol scope_name,
       ?start_at: start_at_config,
-      ?end_at: end_at_config,
-      ?prefix: bool
+      ?end_at: end_at_config
     ) -> void
 
     private
@@ -52,30 +50,42 @@ module InTimeScope
     # Private implementation methods
     # These use ActiveRecord internals and are typed as untyped for flexibility
     def fetch_null_option: (untyped config, untyped column, untyped table_column_hash) -> untyped
-    def method_name: (Symbol scope_name, bool prefix) -> (Symbol | String)
-    def define_scope_methods: (untyped scope_method_name, start_at_column: untyped, start_at_null: untyped, end_at_column: untyped, end_at_null: untyped) -> void
-    def define_error_scope_and_method: (untyped scope_method_name, String message) -> void
-    def define_start_only_scope: (untyped scope_method_name, Symbol column) -> void
-    def define_latest_one_scope: (untyped scope_method_name, Symbol column) -> void
-    def define_earliest_one_scope: (untyped scope_method_name, Symbol column) -> void
-    def define_end_only_scope: (untyped scope_method_name, Symbol column) -> void
-    def define_full_scope: (untyped scope_method_name, Symbol start_column, untyped start_null, Symbol end_column, untyped end_null) -> void
-    def define_instance_method: (untyped scope_method_name, Symbol? start_column, untyped start_null, Symbol? end_column, untyped end_null) -> void
+    def define_scope_methods: (String suffix, start_at_column: untyped, start_at_null: untyped, end_at_column: untyped, end_at_null: untyped) -> void
+    def define_error_scope_and_method: (String suffix, String message) -> void
+    def define_start_only_scope: (String suffix, Symbol column) -> void
+    def define_latest_one_scope: (String suffix, Symbol column) -> void
+    def define_earliest_one_scope: (String suffix, Symbol column) -> void
+    def define_end_only_scope: (String suffix, Symbol column) -> void
+    def define_full_scope: (String suffix, Symbol start_column, untyped start_null, Symbol end_column, untyped end_null) -> void
+    def define_instance_method: (String suffix, Symbol? start_column, untyped start_null, Symbol? end_column, untyped end_null) -> void
+    def define_before_scope: (String suffix, Symbol? start_column, untyped start_null) -> void
+    def define_after_scope: (String suffix, Symbol? end_column, untyped end_null) -> void
+    def define_out_of_time_scope: (String suffix) -> void
   end
 end
 
 # Generated scope methods (dynamically defined)
 # When you call `in_time_scope` on a model, it creates these methods:
 #
-# Class methods:
+# Class methods (primary - records in time window):
 #   Model.in_time(time = Time.current) -> ActiveRecord::Relation
 #   Model.in_time_<name>(time = Time.current) -> ActiveRecord::Relation  (for named scopes)
 #   Model.latest_in_time(foreign_key, time = Time.current) -> ActiveRecord::Relation  (start-only/end-only)
 #   Model.earliest_in_time(foreign_key, time = Time.current) -> ActiveRecord::Relation (start-only/end-only)
 #
-# Instance methods:
+# Class methods (inverse - records outside time window):
+#   Model.before_in_time(time = Time.current) -> ActiveRecord::Relation  (not yet started)
+#   Model.after_in_time(time = Time.current) -> ActiveRecord::Relation   (already ended)
+#   Model.out_of_time(time = Time.current) -> ActiveRecord::Relation     (before OR after)
+#
+# Instance methods (primary):
 #   model.in_time?(time = Time.current) -> bool
 #   model.in_time_<name>?(time = Time.current) -> bool  (for named scopes)
+#
+# Instance methods (inverse):
+#   model.before_in_time?(time = Time.current) -> bool
+#   model.after_in_time?(time = Time.current) -> bool
+#   model.out_of_time?(time = Time.current) -> bool
 
 # Extend ActiveRecord::Base to include InTimeScope
 class ActiveRecord::Base
