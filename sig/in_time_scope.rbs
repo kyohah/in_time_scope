@@ -17,6 +17,22 @@ module InTimeScope
 
   def self.included: (Class model) -> void
 
+  # Extension for rbs_rails integration
+  module RbsRailsExt
+    module GeneratorExt
+      def in_time_scope_methods: () -> String
+
+      private
+
+      def generate_scope_rbs: (scope_definition definition) -> Array[String]
+      def relation_class_name: () -> String
+    end
+
+    module KlassDeclPatch
+      def klass_decl: () -> String
+    end
+  end
+
   # Configuration options for start_at column
   type start_at_config = {
     ?column: Symbol?,
@@ -29,8 +45,20 @@ module InTimeScope
     ?null: bool
   }
 
+  # Scope definition stored for RBS generation
+  type scope_definition = {
+    scope_name: Symbol,
+    scope_method_name: (Symbol | String),
+    start_at_column: Symbol?,
+    end_at_column: Symbol?,
+    pattern: Symbol
+  }
+
   # Class methods added to ActiveRecord models when InTimeScope is included
   module ClassMethods
+    # Returns the list of in_time_scope definitions for RBS generation
+    def in_time_scope_definitions: () -> Array[scope_definition]
+
     # Defines time-window scopes for the model
     #
     # @param scope_name [Symbol] The name of the scope (default: :in_time)
@@ -48,6 +76,8 @@ module InTimeScope
     ) -> void
 
     private
+
+    def determine_pattern: (Symbol? start_at_column, Symbol? end_at_column) -> Symbol
 
     # Private implementation methods
     # These use ActiveRecord internals and are typed as untyped for flexibility
