@@ -17,12 +17,6 @@ module InTimeScope
 
   def self.included: (Class model) -> void
 
-  # RBS generator for InTimeScope scopes
-  class RbsGenerator
-    def self.generate_all: (?output_dir: String) -> Array[String]
-    def self.generate: (Class model, ?output_dir: String) -> String?
-  end
-
   # Extension for rbs_rails integration
   module RbsRailsExt
     module GeneratorExt

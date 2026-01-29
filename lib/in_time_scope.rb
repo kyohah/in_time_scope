@@ -35,9 +35,6 @@ require_relative "in_time_scope/version"
 #
 # @see ClassMethods#in_time_scope
 module InTimeScope
-  # Lazy load RBS generator (not needed at runtime)
-  autoload :RbsGenerator, "in_time_scope/rbs_generator"
-
   # Base error class for InTimeScope errors
   class Error < StandardError; end
 
@@ -430,9 +427,6 @@ end
 ActiveSupport.on_load(:active_record) do
   include InTimeScope
 end
-
-# Load Railtie for Rails integration (provides rake tasks)
-require_relative "in_time_scope/railtie" if defined?(Rails::Railtie)
 
 # Load rbs_rails extension if rbs_rails is available
 require_relative "in_time_scope/rbs_rails_ext" if defined?(RbsRails)
