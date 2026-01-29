@@ -277,16 +277,16 @@ The `earliest_in_time(:foreign_key)` scope uses a `NOT EXISTS` subquery to find 
 
 ### Error Handling
 
-If you specify a scope name but the expected columns don't exist, an error is raised at class load time:
+If you specify a scope name but the expected columns don't exist, a `ColumnNotFoundError` is raised at class load time:
 
 ```ruby
 class Event < ActiveRecord::Base
   include InTimeScope
 
-  # This will raise NoMethodError if hoge_start_at or hoge_end_at columns don't exist
+  # This will raise ColumnNotFoundError if hoge_start_at or hoge_end_at columns don't exist
   in_time_scope :hoge
 end
-# => NoMethodError: undefined method `null' for nil:NilClass
+# => InTimeScope::ColumnNotFoundError: Column 'hoge_start_at' does not exist on table 'events'
 ```
 
 This helps catch configuration errors early during development.

@@ -379,7 +379,7 @@ RSpec.describe InTimeScope do
   end
 
   describe "Error handling" do
-    it "raises error when column does not exist" do
+    it "raises ColumnNotFoundError when column does not exist" do
       expect do
         Class.new(ActiveRecord::Base) do
           self.table_name = "events"
@@ -387,7 +387,7 @@ RSpec.describe InTimeScope do
 
           in_time_scope :nonexistent
         end
-      end.to raise_error(NoMethodError)
+      end.to raise_error(InTimeScope::ColumnNotFoundError, /Column 'nonexistent_start_at' does not exist on table 'events'/)
     end
   end
 end

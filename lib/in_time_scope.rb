@@ -5,6 +5,8 @@ require_relative "in_time_scope/version"
 
 module InTimeScope
   class Error < StandardError; end
+  class ColumnNotFoundError < Error; end
+  class ConfigurationError < Error; end
 
   def self.included(model)
     model.extend ClassMethods
@@ -18,8 +20,8 @@ module InTimeScope
       start_at_column = start_at.fetch(:column, :"#{time_column_prefix}start_at")
       end_at_column = end_at.fetch(:column, :"#{time_column_prefix}end_at")
 
-      start_at_null = start_at.fetch(:null, table_column_hash[start_at_column.to_s].null) unless start_at_column.nil?
-      end_at_null = end_at.fetch(:null, table_column_hash[end_at_column.to_s].null) unless end_at_column.nil?
+      start_at_null = fetch_null_option(start_at, start_at_column, table_column_hash)
+      end_at_null = fetch_null_option(end_at, end_at_column, table_column_hash)
 
       scope_method_name = method_name(scope_name, prefix)
 
@@ -27,6 +29,16 @@ module InTimeScope
     end
 
     private
+
+    def fetch_null_option(config, column, table_column_hash)
+      return nil if column.nil?
+      return config[:null] if config.key?(:null)
+
+      column_info = table_column_hash[column.to_s]
+      raise ColumnNotFoundError, "Column '#{column}' does not exist on table '#{table_name}'" if column_info.nil?
+
+      column_info.null
+    end
 
     def method_name(scope_name, prefix)
       return :in_time if scope_name == :in_time
@@ -38,7 +50,7 @@ module InTimeScope
       # Define class-level scope
       if start_at_column.nil? && end_at_column.nil?
         # Both disabled - return all
-        scope scope_method_name, ->(_time = Time.current) { raise ArgumentError, "At least one of start_at or end_at must be specified." }
+        raise ConfigurationError, "At least one of start_at or end_at must be specified"
       elsif end_at_column.nil?
         # Start-only pattern (history tracking)
         define_start_only_scope(scope_method_name, start_at_column, start_at_null)
