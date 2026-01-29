@@ -13,21 +13,84 @@ See also: [spec/point_system_spec.rb](../../spec/point_system_spec.rb)
 
 ## No Cron Jobs Required
 
-Traditional point systems often require cron jobs to:
-- Activate scheduled points at a specific time
-- Expire points after their validity period
+**This is the killer feature.** Traditional point systems are a nightmare of scheduled jobs:
 
-**With `in_time_scope`, these cron jobs are unnecessary!** The time-based logic is handled at query time:
+### The Cron Hell You're Used To
 
 ```ruby
-# Points are automatically filtered by their validity period
-user.points.in_time.sum(:amount)  # Only counts currently valid points
+# activate_points_job.rb - runs every minute
+class ActivatePointsJob < ApplicationJob
+  def perform
+    Point.where(status: "pending")
+         .where("start_at <= ?", Time.current)
+         .update_all(status: "active")
+  end
+end
+
+# expire_points_job.rb - runs every minute
+class ExpirePointsJob < ApplicationJob
+  def perform
+    Point.where(status: "active")
+         .where("end_at <= ?", Time.current)
+         .update_all(status: "expired")
+  end
+end
+
+# And then you need:
+# - Sidekiq / Delayed Job / Good Job
+# - Redis (for Sidekiq)
+# - Cron or whenever gem
+# - Monitoring for job failures
+# - Retry logic for failed jobs
+# - Lock mechanisms to prevent duplicate runs
 ```
 
-This approach is:
-- **Simpler**: No background job infrastructure needed
-- **More accurate**: No timing drift between cron runs
-- **Auditable**: Historical queries return correct values for any point in time
+### The InTimeScope Way
+
+```ruby
+# That's it. No jobs. No status column. No infrastructure.
+user.points.in_time.sum(:amount)
+```
+
+**One line. Zero infrastructure. Always accurate.**
+
+### Why This Works
+
+The `start_at` and `end_at` columns ARE the state. There's no need for a `status` column because the time comparison happens at query time:
+
+```ruby
+# These all work without any background processing:
+user.points.in_time                    # Currently valid
+user.points.in_time(1.month.from_now)  # Valid next month
+user.points.in_time(1.year.ago)        # Were valid last year (auditing!)
+user.points.before_in_time             # Pending (not yet active)
+user.points.after_in_time              # Expired
+```
+
+### What You Eliminate
+
+| Component | Cron-Based System | InTimeScope |
+|-----------|------------------|-------------|
+| Background job library | Required | **Not needed** |
+| Redis/database for jobs | Required | **Not needed** |
+| Job scheduler (cron) | Required | **Not needed** |
+| Status column | Required | **Not needed** |
+| Migration to update status | Required | **Not needed** |
+| Monitoring for job failures | Required | **Not needed** |
+| Retry logic | Required | **Not needed** |
+| Race condition handling | Required | **Not needed** |
+
+### Bonus: Time Travel for Free
+
+With cron-based systems, answering "How many points did user X have on January 15th?" requires complex audit logging or event sourcing.
+
+With InTimeScope:
+
+```ruby
+user.points.in_time(Date.parse("2024-01-15").middle_of_day).sum(:amount)
+```
+
+**Historical queries just work.** No extra tables. No event sourcing. No complexity.
 
 ## Schema
 
@@ -62,21 +125,6 @@ end
 class User < ApplicationRecord
   has_many :points
   has_many :in_time_points, -> { in_time }, class_name: "Point"
-
-  # Current valid points
-  def valid_points
-    points.in_time.sum(:amount)
-  end
-
-  # Points at a specific time (for auditing)
-  def valid_points_at(time)
-    points.in_time(time).sum(:amount)
-  end
-
-  # Upcoming points (not yet active)
-  def pending_points
-    points.before_in_time.sum(:amount)
-  end
 
   # Grant monthly bonus points (pre-scheduled)
   def grant_monthly_bonus(amount:, months_valid: 6)
@@ -122,36 +170,27 @@ user.points.create!(
 
 ```ruby
 # Current valid points
-user.valid_points
+user.in_time_member_points.sum(:amount)
 # => 100 (only the welcome bonus is currently active)
 
 # Check how many points will be available next month
-user.valid_points_at(1.month.from_now)
+user.in_time_member_points(1.month.from_now).sum(:amount)
 # => 600 (welcome bonus + monthly bonus)
 
 # Pending points (scheduled but not yet active)
-user.pending_points
+user.points.before_in_time.sum(:amount)
 # => 500 (monthly bonus waiting to activate)
 
 # Expired points
-user.points.expired.sum(:amount)
+user.points.after_in_time.sum(:amount)
 
 # All invalid points (pending + expired)
-user.points.invalid.sum(:amount)
+user.points.out_of_time.sum(:amount)
 ```
 
 ### Admin Dashboard Queries
 
 ```ruby
-# All pending points across all users
-Point.before_in_time.group(:reason).sum(:amount)
-# => {"Monthly membership bonus" => 50000}
-
-# Points expiring within 30 days
-Point.where(end_at: Time.current..30.days.from_now)
-     .in_time
-     .sum(:amount)
-
 # Historical audit: points valid on a specific date
 Point.in_time(Date.parse("2024-01-15").middle_of_day)
      .group(:user_id)
@@ -160,7 +199,7 @@ Point.in_time(Date.parse("2024-01-15").middle_of_day)
 
 ## Automatic Membership Bonus Flow
 
-For 6-month premium members, you can set up recurring bonuses without cron:
+For 6-month premium members, you can set up recurring bonuses **without cron, without Sidekiq, without Redis, without monitoring**:
 
 ```ruby
 # When user signs up for premium, create membership and all bonuses atomically
@@ -180,16 +219,45 @@ end
 # => Creates membership + 6 point records that will activate monthly
 ```
 
-## Benefits Over Cron-Based Systems
+## Why This Design is Superior
+
+### Correctness
+
+- **No race conditions**: Cron jobs can run twice, skip runs, or overlap. InTimeScope queries are always deterministic.
+- **No timing drift**: Cron runs at intervals (every minute? every 5 minutes?). InTimeScope is accurate to the millisecond.
+- **No lost updates**: Job failures can leave points in wrong states. InTimeScope has no state to corrupt.
+
+### Simplicity
+
+- **No infrastructure**: Delete your Sidekiq. Delete your Redis. Delete your job monitoring.
+- **No migrations for status changes**: The time IS the status. No `UPDATE` statements needed.
+- **No debugging job logs**: Just query the database to see exactly what's happening.
+
+### Testability
+
+```ruby
+# Cron-based testing is painful:
+travel_to 1.month.from_now do
+  ActivatePointsJob.perform_now
+  ExpirePointsJob.perform_now
+  expect(user.points.active.sum(:amount)).to eq(500)
+end
+
+# InTimeScope testing is trivial:
+expect(user.points.in_time(1.month.from_now).sum(:amount)).to eq(500)
+```
+
+### Summary
 
 | Aspect | Cron-Based | InTimeScope |
 |--------|-----------|-------------|
-| Infrastructure | Requires job scheduler | None |
-| Point activation | Batch at scheduled time | Instant, query-time |
-| Historical queries | Complex, needs snapshots | Simple, always accurate |
-| Timing accuracy | Depends on cron interval | Millisecond precision |
-| Debugging | Check job logs | Query the database |
-| Testing | Mock time + run jobs | Just set the time |
+| Infrastructure | Sidekiq + Redis + Cron | **None** |
+| Point activation | Batch job (delayed) | **Instant** |
+| Historical queries | Impossible without audit log | **Built-in** |
+| Timing accuracy | Minutes (cron interval) | **Milliseconds** |
+| Debugging | Job logs + database | **Database only** |
+| Testing | Time travel + run jobs | **Just query** |
+| Failure modes | Many (job failures, race conditions) | **None** |
 
 ## Tips
 
