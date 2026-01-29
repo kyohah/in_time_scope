@@ -54,19 +54,14 @@ end
 ```ruby
 class Point < ApplicationRecord
   belongs_to :user
-  include InTimeScope
 
   # Both start_at and end_at are required (full time window)
   in_time_scope start_at: { null: false }, end_at: { null: false }
-
-  # Scopes for different point states
-  scope :pending, -> { before_in_time }    # Not yet active
-  scope :expired, -> { after_in_time }     # Already expired
-  scope :invalid, -> { out_of_time }       # Pending OR expired
 end
 
 class User < ApplicationRecord
   has_many :points
+  has_many :in_time_points, -> { in_time }, class_name: "Point"
 
   # Current valid points
   def valid_points

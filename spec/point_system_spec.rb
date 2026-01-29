@@ -128,6 +128,25 @@ RSpec.describe "Point System Example" do
     end
   end
 
+  describe "User#in_time_member_points (has_many with in_time)" do
+    it "returns only currently valid points" do
+      active = MemberPoint.create!(
+        user: user, amount: 100, reason: "Welcome",
+        start_at: one_month_ago, end_at: one_year_later
+      )
+      pending_point = MemberPoint.create!(
+        user: user, amount: 500, reason: "Future",
+        start_at: one_month_later, end_at: seven_months_later
+      )
+
+      allow(Time).to receive(:current).and_return(now)
+      result = user.in_time_member_points
+
+      expect(result).to include(active)
+      expect(result).not_to include(pending_point)
+    end
+  end
+
   describe "User#valid_points" do
     it "sums only currently valid points" do
       MemberPoint.create!(

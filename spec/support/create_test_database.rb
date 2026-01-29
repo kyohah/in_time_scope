@@ -163,6 +163,7 @@ class User < ActiveRecord::Base
   has_many :prices
   has_many :user_name_histories
   has_many :member_points
+  has_many :in_time_member_points, -> { in_time }, class_name: "MemberPoint"
 
   # Simple approach: in_time + order (loads all matching records into memory)
   has_one :current_price,
