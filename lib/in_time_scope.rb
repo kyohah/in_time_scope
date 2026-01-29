@@ -67,15 +67,17 @@ module InTimeScope
     end
 
     def define_start_only_scope(scope_method_name, start_column, start_null)
+      col = start_column
+
       # Simple scope - WHERE only, no ORDER BY
       # Users can add .order(start_at: :desc) externally if needed
       if start_null
         scope scope_method_name, ->(time = Time.current) {
-          where(arel_table[start_column].eq(nil).or(arel_table[start_column].lteq(time)))
+          where(col => nil).or(where(col => ..time))
         }
       else
         scope scope_method_name, ->(time = Time.current) {
-          where(arel_table[start_column].lteq(time))
+          where(col => ..time)
         }
       end
 
@@ -85,94 +87,93 @@ module InTimeScope
       define_earliest_one_scope(scope_method_name, start_column, start_null)
     end
 
+    # Returns a lambda that builds in_time condition for Arel (used in NOT EXISTS subqueries with aliased tables)
+    def arel_lteq_condition_builder(column, nullable)
+      if nullable
+        ->(table, time) { table[column].eq(nil).or(table[column].lteq(time)) }
+      else
+        ->(table, time) { table[column].lteq(time) }
+      end
+    end
+
     def define_latest_one_scope(scope_method_name, start_column, start_null)
       latest_method_name = scope_method_name == :in_time ? :latest_in_time : :"latest_#{scope_method_name}"
-      tbl = table_name
       col = start_column
+      col_null = start_null
+      build_condition = arel_lteq_condition_builder(col, col_null)
 
       # NOT EXISTS approach: select records where no later record exists for the same foreign key
-      # SELECT * FROM prices p1 WHERE start_at <= ? AND NOT EXISTS (
-      #   SELECT 1 FROM prices p2 WHERE p2.user_id = p1.user_id
-      #   AND p2.start_at <= ? AND p2.start_at > p1.start_at
-      # )
       scope latest_method_name, ->(foreign_key, time = Time.current) {
-        fk = foreign_key
+        p2 = arel_table.alias("p2")
 
-        not_exists_sql = if start_null
-                           <<~SQL.squish
-                             NOT EXISTS (
-                               SELECT 1 FROM #{tbl} p2
-                               WHERE p2.#{fk} = #{tbl}.#{fk}
-                               AND (p2.#{col} IS NULL OR p2.#{col} <= ?)
-                               AND (p2.#{col} IS NULL OR p2.#{col} > #{tbl}.#{col} OR #{tbl}.#{col} IS NULL)
-                               AND p2.id != #{tbl}.id
-                             )
-                           SQL
-                         else
-                           <<~SQL.squish
-                             NOT EXISTS (
-                               SELECT 1 FROM #{tbl} p2
-                               WHERE p2.#{fk} = #{tbl}.#{fk}
-                               AND p2.#{col} <= ?
-                               AND p2.#{col} > #{tbl}.#{col}
-                             )
-                           SQL
-                         end
+        # p2 is in_time
+        p2_in_time = build_condition.call(p2, time)
 
-        base_condition = if start_null
-                           where(arel_table[col].eq(nil).or(arel_table[col].lteq(time)))
-                         else
-                           where(arel_table[col].lteq(time))
-                         end
+        # p2 is later than current record
+        p2_is_later = if col_null
+                        p2[col].eq(nil).or(p2[col].gt(arel_table[col])).or(arel_table[col].eq(nil))
+                      else
+                        p2[col].gt(arel_table[col])
+                      end
 
-        base_condition.where(not_exists_sql, time)
+        subquery = Arel::SelectManager.new(arel_table)
+                                      .from(p2)
+                                      .project(Arel.sql("1"))
+                                      .where(p2[foreign_key].eq(arel_table[foreign_key]))
+                                      .where(p2_in_time)
+                                      .where(p2_is_later)
+                                      .where(p2[:id].not_eq(arel_table[:id]))
+
+        not_exists = Arel::Nodes::Not.new(Arel::Nodes::Exists.new(subquery.ast))
+
+        where(build_condition.call(arel_table, time)).where(not_exists)
       }
     end
 
     def define_earliest_one_scope(scope_method_name, start_column, start_null)
       earliest_method_name = scope_method_name == :in_time ? :earliest_in_time : :"earliest_#{scope_method_name}"
-      tbl = table_name
       col = start_column
-      scope earliest_method_name, ->(foreign_key, time = Time.current) {
-        fk = foreign_key
-        not_exists_sql = if start_null
-                           <<~SQL.squish
-                             NOT EXISTS (
-                               SELECT 1 FROM #{tbl} p2
-                               WHERE p2.#{fk} = #{tbl}.#{fk}
-                               AND (p2.#{col} IS NULL OR p2.#{col} <= ?)
-                               AND (p2.#{col} IS NULL OR p2.#{col} < #{tbl}.#{col} OR #{tbl}.#{col} IS NULL)
-                               AND p2.id != #{tbl}.id
-                             )
-                           SQL
-                         else
-                           <<~SQL.squish
-                             NOT EXISTS (
-                               SELECT 1 FROM #{tbl} p2
-                               WHERE p2.#{fk} = #{tbl}.#{fk}
-                               AND p2.#{col} <= ?
-                               AND p2.#{col} < #{tbl}.#{col}
-                             )
-                           SQL
-                         end
-        base_condition = if start_null
-                           where(arel_table[col].eq(nil).or(arel_table[col].lteq(time)))
-                         else
-                           where(arel_table[col].lteq(time))
-                         end
+      col_null = start_null
+      build_condition = arel_lteq_condition_builder(col, col_null)
 
-        base_condition.where(not_exists_sql, time)
+      # NOT EXISTS approach: select records where no earlier record exists for the same foreign key
+      scope earliest_method_name, ->(foreign_key, time = Time.current) {
+        p2 = arel_table.alias("p2")
+
+        # p2 is in_time
+        p2_in_time = build_condition.call(p2, time)
+
+        # p2 is earlier than current record
+        p2_is_earlier = if col_null
+                          p2[col].eq(nil).or(p2[col].lt(arel_table[col])).or(arel_table[col].eq(nil))
+                        else
+                          p2[col].lt(arel_table[col])
+                        end
+
+        subquery = Arel::SelectManager.new(arel_table)
+                                      .from(p2)
+                                      .project(Arel.sql("1"))
+                                      .where(p2[foreign_key].eq(arel_table[foreign_key]))
+                                      .where(p2_in_time)
+                                      .where(p2_is_earlier)
+                                      .where(p2[:id].not_eq(arel_table[:id]))
+
+        not_exists = Arel::Nodes::Not.new(Arel::Nodes::Exists.new(subquery.ast))
+
+        where(build_condition.call(arel_table, time)).where(not_exists)
       }
     end
 
     def define_end_only_scope(scope_method_name, end_column, end_null)
+      col = end_column
+
       if end_null
         scope scope_method_name, ->(time = Time.current) {
-          where(arel_table[end_column].eq(nil).or(arel_table[end_column].gt(time)))
+          where(col => nil).or(where.not(col => ..time))
         }
       else
         scope scope_method_name, ->(time = Time.current) {
-          where(arel_table[end_column].gt(time))
+          where.not(col => ..time)
         }
       end
 
@@ -181,20 +182,23 @@ module InTimeScope
     end
 
     def define_full_scope(scope_method_name, start_column, start_null, end_column, end_null)
+      s_col = start_column
+      e_col = end_column
+
       scope scope_method_name, ->(time = Time.current) {
-        start_condition = if start_null
-                            arel_table[start_column].eq(nil).or(arel_table[start_column].lteq(time))
-                          else
-                            arel_table[start_column].lteq(time)
-                          end
+        start_scope = if start_null
+                        where(s_col => nil).or(where(s_col => ..time))
+                      else
+                        where(s_col => ..time)
+                      end
 
-        end_condition = if end_null
-                          arel_table[end_column].eq(nil).or(arel_table[end_column].gt(time))
-                        else
-                          arel_table[end_column].gt(time)
-                        end
+        end_scope = if end_null
+                      where(e_col => nil).or(where.not(e_col => ..time))
+                    else
+                      where.not(e_col => ..time)
+                    end
 
-        where(start_condition).where(end_condition)
+        start_scope.merge(end_scope)
       }
 
       define_latest_one_scope(scope_method_name, start_column, start_null)
