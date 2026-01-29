@@ -11,90 +11,72 @@ module InTimeScope
   end
 
   module ClassMethods
-    def in_time_scope(scope_name = nil, start_at: {}, end_at: {}, prefix: false)
-      scope_name ||= :in_time
-      scope_prefix = scope_name == :in_time ? "" : "#{scope_name}_"
+    # default: in_time
+    # end_atはカラムからとってくる
+    def in_time_scope(scope_name = :in_time, start_at: {}, end_at: {}, prefix: false)
+      table_column_hash = columns_hash
+      time_column_prefix = scope_name == :in_time ? "" : "#{scope_name}_"
 
-      start_config = normalize_config(start_at, :"#{scope_prefix}start_at")
-      end_config = normalize_config(end_at, :"#{scope_prefix}end_at")
+      start_at_column = start_at.fetch(:column, :"#{time_column_prefix}start_at")
+      end_at_column = end_at.fetch(:column, :"#{time_column_prefix}end_at")
 
-      define_scope_methods(scope_name, start_config, end_config, prefix)
+      start_at_null = start_at.fetch(:null, table_column_hash[start_at_column.to_s].null) unless start_at_column.nil?
+      end_at_null = end_at.fetch(:null, table_column_hash[end_at_column.to_s].null) unless end_at_column.nil?
+
+      scope_method_name = method_name(scope_name, prefix)
+
+      define_scope_methods(scope_method_name, start_at_column:, start_at_null:, end_at_column:, end_at_null:)
     end
 
     private
 
-    def normalize_config(config, default_column)
-      return { column: nil, null: true } if config[:column].nil? && config.key?(:column)
+    def method_name(scope_name, prefix)
+      return :in_time if scope_name == :in_time
 
-      column = config[:column] || default_column
-      column = nil unless column_names.include?(column.to_s)
-
-      null = config.key?(:null) ? config[:null] : column_nullable?(column)
-
-      { column: column, null: null }
+      prefix ? "#{scope_name}_in_time" : "in_time_#{scope_name}"
     end
 
-    def column_nullable?(column_name)
-      return true if column_name.nil?
-
-      col = columns_hash[column_name.to_s]
-      col ? col.null : true
-    end
-
-    def define_scope_methods(scope_name, start_config, end_config, prefix)
-      method_name = if scope_name == :in_time
-                      :in_time
-                    elsif prefix
-                      :"#{scope_name}_in_time"
-                    else
-                      :"in_time_#{scope_name}"
-                    end
-      instance_method_name = :"#{method_name}?"
-
-      start_column = start_config[:column]
-      start_null = start_config[:null]
-      end_column = end_config[:column]
-      end_null = end_config[:null]
-
+    def define_scope_methods(scope_method_name, start_at_column:, start_at_null:, end_at_column:, end_at_null:)
       # Define class-level scope
-      if start_column.nil? && end_column.nil?
+      if start_at_column.nil? && end_at_column.nil?
         # Both disabled - return all
-        scope method_name, ->(_time = Time.current) { all }
-      elsif end_column.nil?
+        scope scope_method_name, ->(_time = Time.current) { raise ArgumentError, "At least one of start_at or end_at must be specified." }
+      elsif end_at_column.nil?
         # Start-only pattern (history tracking)
-        define_start_only_scope(method_name, start_column, start_null)
-      elsif start_column.nil?
+        define_start_only_scope(scope_method_name, start_at_column, start_at_null)
+      elsif start_at_column.nil?
         # End-only pattern (expiration)
-        define_end_only_scope(method_name, end_column, end_null)
+        define_end_only_scope(scope_method_name, end_at_column, end_at_null)
       else
         # Both start and end
-        define_full_scope(method_name, start_column, start_null, end_column, end_null)
+        define_full_scope(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
       end
 
       # Define instance method
-      define_instance_method(instance_method_name, start_column, start_null, end_column, end_null)
+      define_instance_method(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
     end
 
-    def define_start_only_scope(method_name, start_column, start_null)
+    def define_start_only_scope(scope_method_name, start_column, start_null)
       # Simple scope - WHERE only, no ORDER BY
       # Users can add .order(start_at: :desc) externally if needed
       if start_null
-        scope method_name, ->(time = Time.current) {
+        scope scope_method_name, ->(time = Time.current) {
           where(arel_table[start_column].eq(nil).or(arel_table[start_column].lteq(time)))
         }
       else
-        scope method_name, ->(time = Time.current) {
+        scope scope_method_name, ->(time = Time.current) {
           where(arel_table[start_column].lteq(time))
         }
       end
 
       # Efficient scope for has_one + includes using NOT EXISTS subquery
       # Usage: has_one :current_price, -> { latest_in_time(:user_id) }, class_name: 'Price'
-      define_latest_scope(method_name, start_column, start_null)
+      define_latest_one_scope(scope_method_name, start_column, start_null)
+      define_oldest_one_scope(scope_method_name, start_column, start_null)
     end
 
-    def define_latest_scope(method_name, start_column, start_null)
-      latest_method_name = method_name == :in_time ? :latest_in_time : :"latest_#{method_name}"
+    def define_latest_one_scope(scope_method_name, start_column, start_null)
+      latest_method_name = scope_method_name == :in_time ? :latest_in_time : :"latest_#{scope_method_name}"
       tbl = table_name
       col = start_column
 
@@ -137,20 +119,60 @@ module InTimeScope
       }
     end
 
-    def define_end_only_scope(method_name, end_column, end_null)
+    def define_oldest_one_scope(scope_method_name, start_column, start_null)
+      oldest_method_name = scope_method_name == :in_time ? :oldest_in_time : :"oldest_#{scope_method_name}"
+      tbl = table_name
+      col = start_column
+      scope oldest_method_name, ->(foreign_key, time = Time.current) {
+        fk = foreign_key
+        exists_sql = if start_null
+                       <<~SQL.squish
+                         EXISTS (
+                           SELECT 1 FROM #{tbl} p2
+                            WHERE p2.#{fk} = #{tbl}.#{fk}
+                            AND (p2.#{col} IS NULL OR p2.#{col} <= ?)
+                            AND (p2.#{col} IS NULL OR p2.#{col} < #{tbl}.#{col} OR #{tbl}.#{col} IS NULL)
+                            AND p2.id != #{tbl}.id
+                         )
+                       SQL
+                     else
+                       <<~SQL.squish
+                         EXISTS (
+                           SELECT 1 FROM #{tbl} p2
+                            WHERE p2.#{fk} = #{tbl}.#{fk}
+                            AND p2.#{col} <= ?
+                            AND p2.#{col} < #{tbl}.#{col}
+                            AND p2.id != #{tbl}.id
+                         )
+                       SQL
+                     end
+        base_condition = if start_null
+                           where(arel_table[col].eq(nil).or(arel_table[col].lteq(time)))
+                         else
+                           where(arel_table[col].lteq(time))
+                         end
+
+        base_condition.where(exists_sql, time)
+      }
+    end
+
+    def define_end_only_scope(scope_method_name, end_column, end_null)
       if end_null
-        scope method_name, ->(time = Time.current) {
+        scope scope_method_name, ->(time = Time.current) {
           where(arel_table[end_column].eq(nil).or(arel_table[end_column].gt(time)))
         }
       else
-        scope method_name, ->(time = Time.current) {
+        scope scope_method_name, ->(time = Time.current) {
           where(arel_table[end_column].gt(time))
         }
       end
+
+      define_latest_one_scope(scope_method_name, end_column, end_null)
+      define_oldest_one_scope(scope_method_name, end_column, end_null)
     end
 
-    def define_full_scope(method_name, start_column, start_null, end_column, end_null)
-      scope method_name, ->(time = Time.current) {
+    def define_full_scope(scope_method_name, start_column, start_null, end_column, end_null)
+      scope scope_method_name, ->(time = Time.current) {
         start_condition = if start_null
                             arel_table[start_column].eq(nil).or(arel_table[start_column].lteq(time))
                           else
@@ -165,10 +187,13 @@ module InTimeScope
 
         where(start_condition).where(end_condition)
       }
+
+      define_latest_one_scope(scope_method_name, start_column, start_null)
+      define_oldest_one_scope(scope_method_name, start_column, start_null)
     end
 
-    def define_instance_method(method_name, start_column, start_null, end_column, end_null)
-      define_method(method_name) do |time = Time.current|
+    def define_instance_method(scope_method_name, start_column, start_null, end_column, end_null)
+      define_method("#{scope_method_name}?") do |time = Time.current|
         start_ok = if start_column.nil?
                      true
                    elsif start_null
