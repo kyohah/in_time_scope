@@ -77,7 +77,7 @@ module InTimeScope
         return original if in_time_methods.empty?
 
         # Insert before the closing "end" of the class
-        original.sub(/^(\s*end\s*)$/m) { "#{in_time_methods}\n#{$1}" }
+        original.sub(/^(\s*end\s*)$/m) { "#{in_time_methods}\n#{::Regexp.last_match(1)}" }
       end
     end
   end
