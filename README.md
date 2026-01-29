@@ -140,6 +140,24 @@ Inspired by [onk/shibaraku](https://github.com/onk/shibaraku). This gem extends 
 - Start-only / End-only patterns
 - `latest_in_time` / `earliest_in_time` for efficient `has_one` associations
 
+## Development
+
+```bash
+# Install dependencies
+bin/setup
+
+# Run tests
+bundle exec rspec
+
+# Run linting
+bundle exec rubocop
+
+# Generate CLAUDE.md (for AI coding assistants)
+npx rulesync generate
+```
+
+This project uses [rulesync](https://github.com/dyoshikawa/rulesync) to manage AI assistant rules. Edit `.rulesync/rules/*.md` and run `npx rulesync generate` to update `CLAUDE.md`.
+
 ## Contributing
 
 Bug reports and pull requests are welcome on [GitHub](https://github.com/kyohah/in_time_scope).

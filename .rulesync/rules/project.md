@@ -1,8 +1,10 @@
-# CLAUDE.md
+---
+targets:
+  - claudecode
+root: true
+---
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Project Overview
+# Project Overview
 
 InTimeScope is a Ruby gem that adds time-window scopes to ActiveRecord models. It provides a convenient way to query records that fall within specific time periods (between `start_at` and `end_at` timestamps), with support for nullable columns, custom column names, and multiple scopes per model.
 
@@ -39,7 +41,7 @@ bundle exec rake install
 
 ## Code Style
 
-- Ruby 3.1+ required
+- Ruby 3.0+ required
 - Use double-quoted strings (enforced by RuboCop)
 - All files must have `# frozen_string_literal: true` header
 
