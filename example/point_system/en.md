@@ -138,6 +138,31 @@ class User < ApplicationRecord
 end
 ```
 
+### The Power of `has_many :in_time_points`
+
+This simple line unlocks **N+1 free eager loading** for valid points:
+
+```ruby
+# Load 100 users with their valid points in just 2 queries
+users = User.includes(:in_time_points).limit(100)
+
+users.each do |user|
+  # No additional queries! Already loaded.
+  total = user.in_time_points.sum(&:amount)
+  puts "#{user.name}: #{total} points"
+end
+```
+
+Without this association, you'd need:
+
+```ruby
+# N+1 problem: 1 query for users + 100 queries for points
+users = User.limit(100)
+users.each do |user|
+  total = user.points.in_time.sum(:amount)  # Query per user!
+end
+```
+
 ## Usage
 
 ### Granting Points with Different Validity Periods
