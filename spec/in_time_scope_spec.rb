@@ -214,25 +214,18 @@ RSpec.describe InTimeScope do
 
   describe "End-Only Pattern (Coupon)" do
     describe ".in_time" do
-      it "returns records where expired_at is nil or > time" do
+      it "returns records where expired_at > time" do
         active = Coupon.create!(expired_at: future)
-        never_expires = Coupon.create!(expired_at: nil)
         expired = Coupon.create!(expired_at: past)
 
         result = Coupon.in_time(now)
 
-        expect(result).to include(active, never_expires)
+        expect(result).to include(active)
         expect(result).not_to include(expired)
       end
     end
 
     describe "#in_time?" do
-      it "returns true when expired_at is nil" do
-        coupon = Coupon.create!(expired_at: nil)
-
-        expect(coupon.in_time?(now)).to be true
-      end
-
       it "returns true when expired_at > time" do
         coupon = Coupon.create!(expired_at: future)
 

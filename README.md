@@ -94,8 +94,8 @@ Use these options in `in_time_scope` to customize column behavior.
 ### Alternative: Start-Only History (No `end_at`)
 Use this when periods never overlap and you want exactly one "current" row.
 
-Assumptions:
-- `start_at` is always present
+**Requirements:**
+- `start_at` must be NOT NULL (a `ConfigurationError` is raised otherwise)
 - periods never overlap (validated)
 - the latest row is the current one
 
@@ -130,9 +130,9 @@ CREATE INDEX index_events_on_start_at ON events (start_at);
 ### Alternative: End-Only Expiration (No `start_at`)
 Use this when a record is active immediately and expires at `end_at`.
 
-Assumptions:
+**Requirements:**
+- `end_at` must be NOT NULL (a `ConfigurationError` is raised otherwise)
 - `start_at` is not used (implicit "always active")
-- `end_at` can be `NULL` for "never expires"
 
 If your table still has a `start_at` column but you want to ignore it, disable it via options:
 
@@ -141,11 +141,11 @@ class Event < ActiveRecord::Base
   include InTimeScope
 
   # Ignore start_at and only use end_at
-  in_time_scope start_at: { column: nil }, end_at: { null: true }
+  in_time_scope start_at: { column: nil }, end_at: { null: false }
 end
 
 Event.in_time(Time.parse("2024-06-01 12:00:00"))
-# => SELECT "events".* FROM "events" WHERE ("events"."end_at" IS NULL OR "events"."end_at" > '2024-06-01 12:00:00.000000')
+# => SELECT "events".* FROM "events" WHERE "events"."end_at" > '2024-06-01 12:00:00.000000'
 ```
 
 Recommended index:
@@ -201,7 +201,9 @@ Event.published_in_time
 
 ### Using with `has_one` Associations
 
-The start-only pattern provides scopes for `has_one` associations:
+The start-only and end-only patterns provide `latest_in_time` and `earliest_in_time` scopes for efficient `has_one` associations.
+
+**Note:** These scopes are NOT available for full time window patterns (both `start_at` and `end_at`), because the concept of "latest" or "earliest" is ambiguous when there's a time range.
 
 #### Simple approach: `in_time` + `order`
 

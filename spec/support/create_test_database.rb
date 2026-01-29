@@ -56,9 +56,9 @@ ActiveRecord::Schema.define version: 0 do
     t.timestamps
   end
 
-  # End-only pattern (expiration)
+  # End-only pattern (expiration) - requires NOT NULL
   create_table :coupons, force: true do |t|
-    t.datetime :expired_at
+    t.datetime :expired_at, null: false
     t.timestamps
   end
 end
@@ -100,11 +100,11 @@ class History < ActiveRecord::Base
   in_time_scope start_at: { null: false }, end_at: { column: nil }
 end
 
-# End-only pattern
+# End-only pattern (requires non-nullable column)
 class Coupon < ActiveRecord::Base
   include InTimeScope
 
-  in_time_scope start_at: { column: nil }, end_at: { column: :expired_at, null: true }
+  in_time_scope start_at: { column: nil }, end_at: { column: :expired_at, null: false }
 end
 
 # Price with start-only pattern for has_one tests

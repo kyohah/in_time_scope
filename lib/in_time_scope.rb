@@ -49,14 +49,21 @@ module InTimeScope
     def define_scope_methods(scope_method_name, start_at_column:, start_at_null:, end_at_column:, end_at_null:)
       # Define class-level scope
       if start_at_column.nil? && end_at_column.nil?
-        # Both disabled - return all
         raise ConfigurationError, "At least one of start_at or end_at must be specified"
       elsif end_at_column.nil?
-        # Start-only pattern (history tracking)
-        define_start_only_scope(scope_method_name, start_at_column, start_at_null)
+        # Start-only pattern (history tracking) - requires non-nullable column
+        if start_at_null
+          raise ConfigurationError,
+                "Start-only pattern requires non-nullable column. Set `start_at: { null: false }` or add an end_at column"
+        end
+        define_start_only_scope(scope_method_name, start_at_column)
       elsif start_at_column.nil?
-        # End-only pattern (expiration)
-        define_end_only_scope(scope_method_name, end_at_column, end_at_null)
+        # End-only pattern (expiration) - requires non-nullable column
+        if end_at_null
+          raise ConfigurationError,
+                "End-only pattern requires non-nullable column. Set `end_at: { null: false }` or add a start_at column"
+        end
+        define_end_only_scope(scope_method_name, end_at_column)
       else
         # Both start and end
         define_full_scope(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
@@ -66,119 +73,75 @@ module InTimeScope
       define_instance_method(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
     end
 
-    def define_start_only_scope(scope_method_name, start_column, start_null)
-      col = start_column
+    def define_start_only_scope(scope_method_name, column)
+      col = column
 
       # Simple scope - WHERE only, no ORDER BY
       # Users can add .order(start_at: :desc) externally if needed
-      if start_null
-        scope scope_method_name, ->(time = Time.current) {
-          where(col => nil).or(where(col => ..time))
-        }
-      else
-        scope scope_method_name, ->(time = Time.current) {
-          where(col => ..time)
-        }
-      end
+      scope scope_method_name, ->(time = Time.current) {
+        where(col => ..time)
+      }
 
       # Efficient scope for has_one + includes using NOT EXISTS subquery
       # Usage: has_one :current_price, -> { latest_in_time(:user_id) }, class_name: 'Price'
-      define_latest_one_scope(scope_method_name, start_column, start_null)
-      define_earliest_one_scope(scope_method_name, start_column, start_null)
+      define_latest_one_scope(scope_method_name, column)
+      define_earliest_one_scope(scope_method_name, column)
     end
 
-    # Returns a lambda that builds in_time condition for Arel (used in NOT EXISTS subqueries with aliased tables)
-    def arel_lteq_condition_builder(column, nullable)
-      if nullable
-        ->(table, time) { table[column].eq(nil).or(table[column].lteq(time)) }
-      else
-        ->(table, time) { table[column].lteq(time) }
-      end
-    end
-
-    def define_latest_one_scope(scope_method_name, start_column, start_null)
+    def define_latest_one_scope(scope_method_name, column)
       latest_method_name = scope_method_name == :in_time ? :latest_in_time : :"latest_#{scope_method_name}"
-      col = start_column
-      col_null = start_null
-      build_condition = arel_lteq_condition_builder(col, col_null)
+      col = column
 
       # NOT EXISTS approach: select records where no later record exists for the same foreign key
       scope latest_method_name, ->(foreign_key, time = Time.current) {
         p2 = arel_table.alias("p2")
 
-        # p2 is in_time
-        p2_in_time = build_condition.call(p2, time)
-
-        # p2 is later than current record
-        p2_is_later = if col_null
-                        p2[col].eq(nil).or(p2[col].gt(arel_table[col])).or(arel_table[col].eq(nil))
-                      else
-                        p2[col].gt(arel_table[col])
-                      end
-
         subquery = Arel::SelectManager.new(arel_table)
                                       .from(p2)
                                       .project(Arel.sql("1"))
                                       .where(p2[foreign_key].eq(arel_table[foreign_key]))
-                                      .where(p2_in_time)
-                                      .where(p2_is_later)
+                                      .where(p2[col].lteq(time))
+                                      .where(p2[col].gt(arel_table[col]))
                                       .where(p2[:id].not_eq(arel_table[:id]))
 
         not_exists = Arel::Nodes::Not.new(Arel::Nodes::Exists.new(subquery.ast))
 
-        where(build_condition.call(arel_table, time)).where(not_exists)
+        where(col => ..time).where(not_exists)
       }
     end
 
-    def define_earliest_one_scope(scope_method_name, start_column, start_null)
+    def define_earliest_one_scope(scope_method_name, column)
       earliest_method_name = scope_method_name == :in_time ? :earliest_in_time : :"earliest_#{scope_method_name}"
-      col = start_column
-      col_null = start_null
-      build_condition = arel_lteq_condition_builder(col, col_null)
+      col = column
 
       # NOT EXISTS approach: select records where no earlier record exists for the same foreign key
       scope earliest_method_name, ->(foreign_key, time = Time.current) {
         p2 = arel_table.alias("p2")
 
-        # p2 is in_time
-        p2_in_time = build_condition.call(p2, time)
-
-        # p2 is earlier than current record
-        p2_is_earlier = if col_null
-                          p2[col].eq(nil).or(p2[col].lt(arel_table[col])).or(arel_table[col].eq(nil))
-                        else
-                          p2[col].lt(arel_table[col])
-                        end
-
         subquery = Arel::SelectManager.new(arel_table)
                                       .from(p2)
                                       .project(Arel.sql("1"))
                                       .where(p2[foreign_key].eq(arel_table[foreign_key]))
-                                      .where(p2_in_time)
-                                      .where(p2_is_earlier)
+                                      .where(p2[col].lteq(time))
+                                      .where(p2[col].lt(arel_table[col]))
                                       .where(p2[:id].not_eq(arel_table[:id]))
 
         not_exists = Arel::Nodes::Not.new(Arel::Nodes::Exists.new(subquery.ast))
 
-        where(build_condition.call(arel_table, time)).where(not_exists)
+        where(col => ..time).where(not_exists)
       }
     end
 
-    def define_end_only_scope(scope_method_name, end_column, end_null)
-      col = end_column
+    def define_end_only_scope(scope_method_name, column)
+      col = column
 
-      if end_null
-        scope scope_method_name, ->(time = Time.current) {
-          where(col => nil).or(where.not(col => ..time))
-        }
-      else
-        scope scope_method_name, ->(time = Time.current) {
-          where.not(col => ..time)
-        }
-      end
+      scope scope_method_name, ->(time = Time.current) {
+        where.not(col => ..time)
+      }
 
-      define_latest_one_scope(scope_method_name, end_column, end_null)
-      define_earliest_one_scope(scope_method_name, end_column, end_null)
+      # Efficient scope for has_one + includes using NOT EXISTS subquery
+      define_latest_one_scope(scope_method_name, column)
+      define_earliest_one_scope(scope_method_name, column)
     end
 
     def define_full_scope(scope_method_name, start_column, start_null, end_column, end_null)
@@ -201,8 +164,9 @@ module InTimeScope
         start_scope.merge(end_scope)
       }
 
-      define_latest_one_scope(scope_method_name, start_column, start_null)
-      define_earliest_one_scope(scope_method_name, start_column, start_null)
+      # NOTE: latest_in_time / earliest_in_time are NOT defined for full scope (both start and end)
+      # because the concept of "latest" or "earliest" is ambiguous when there's a time range.
+      # These scopes are only available for start-only or end-only patterns.
     end
 
     def define_instance_method(scope_method_name, start_column, start_null, end_column, end_null)
