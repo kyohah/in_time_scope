@@ -21,8 +21,6 @@ module InTimeScope
     # @option end_at [Boolean] :null Whether the column allows NULL values
     #   (auto-detected from schema if not specified)
     #
-    # @param prefix [Boolean] If true, creates +<scope_name>_in_time+ instead of +in_time_<scope_name>+
-    #
     # @raise [ColumnNotFoundError] When a specified column doesn't exist (at class load time)
     # @raise [ConfigurationError] When both columns are nil, or when using start-only/end-only
     #   pattern with a nullable column (at scope call time)
@@ -56,7 +54,7 @@ module InTimeScope
     #   in_time_scope start_at: { column: nil }, end_at: { null: false }
     #   # Also creates: Model.latest_in_time(:foreign_key), Model.earliest_in_time(:foreign_key)
     #
-    def in_time_scope(scope_name = :in_time, start_at: {}, end_at: {}, prefix: false)
+    def in_time_scope(scope_name = :in_time, start_at: {}, end_at: {})
       table_column_hash = columns_hash
       time_column_prefix = scope_name == :in_time ? "" : "#{scope_name}_"
 
@@ -66,10 +64,8 @@ module InTimeScope
       start_at_null = fetch_null_option(start_at, start_at_column, table_column_hash)
       end_at_null = fetch_null_option(end_at, end_at_column, table_column_hash)
 
-      scope_method_name = method_name(scope_name, prefix)
-
       define_scope_methods(
-        scope_method_name,
+        scope_name == :in_time ? "" : "_#{scope_name}",
         start_at_column: start_at_column,
         start_at_null: start_at_null,
         end_at_column: end_at_column,
@@ -97,84 +93,72 @@ module InTimeScope
       column_info.null
     end
 
-    # Generates the method name for the scope
-    #
-    # @param scope_name [Symbol] The scope name
-    # @param prefix [Boolean] Whether to use prefix style
-    # @return [Symbol] The generated method name
-    # @api private
-    def method_name(scope_name, prefix)
-      return :in_time if scope_name == :in_time
-
-      prefix ? "#{scope_name}_in_time" : "in_time_#{scope_name}"
-    end
-
     # Defines the appropriate scope methods based on configuration
     #
-    # @param scope_method_name [Symbol] The name of the scope method to create
+    # @param suffix [String] The suffix for method names ("" or "_#{scope_name}")
     # @param start_at_column [Symbol, nil] Start column name
     # @param start_at_null [Boolean, nil] Whether start column allows NULL
     # @param end_at_column [Symbol, nil] End column name
     # @param end_at_null [Boolean, nil] Whether end column allows NULL
     # @return [void]
     # @api private
-    def define_scope_methods(scope_method_name, start_at_column:, start_at_null:, end_at_column:, end_at_null:)
+    def define_scope_methods(suffix, start_at_column:, start_at_null:, end_at_column:, end_at_null:)
       # Define class-level scope and instance method
       if start_at_column.nil? && end_at_column.nil?
-        define_error_scope_and_method(scope_method_name,
+        define_error_scope_and_method(suffix,
                                       "At least one of start_at or end_at must be specified")
       elsif end_at_column.nil?
         # Start-only pattern (history tracking) - requires non-nullable column
         if start_at_null
-          define_error_scope_and_method(scope_method_name,
+          define_error_scope_and_method(suffix,
                                         "Start-only pattern requires non-nullable column. " \
                                         "Set `start_at: { null: false }` or add an end_at column")
         else
-          define_start_only_scope(scope_method_name, start_at_column)
-          define_instance_method(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
-          define_latest_one_scope(scope_method_name, start_at_column)
-          define_earliest_one_scope(scope_method_name, start_at_column)
-          define_before_scope(scope_method_name, start_at_column, start_at_null)
-          define_after_scope(scope_method_name, end_at_column, end_at_null)
-          define_out_of_time_scope(scope_method_name)
+          define_start_only_scope(suffix, start_at_column)
+          define_instance_method(suffix, start_at_column, start_at_null, end_at_column, end_at_null)
+          define_latest_one_scope(suffix, start_at_column)
+          define_earliest_one_scope(suffix, start_at_column)
+          define_before_scope(suffix, start_at_column, start_at_null)
+          define_after_scope(suffix, end_at_column, end_at_null)
+          define_out_of_time_scope(suffix)
         end
       elsif start_at_column.nil?
         # End-only pattern (expiration) - requires non-nullable column
         if end_at_null
-          define_error_scope_and_method(scope_method_name,
+          define_error_scope_and_method(suffix,
                                         "End-only pattern requires non-nullable column. " \
                                         "Set `end_at: { null: false }` or add a start_at column")
         else
-          define_end_only_scope(scope_method_name, end_at_column)
-          define_instance_method(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
-          define_latest_one_scope(scope_method_name, end_at_column)
-          define_earliest_one_scope(scope_method_name, end_at_column)
-          define_before_scope(scope_method_name, start_at_column, start_at_null)
-          define_after_scope(scope_method_name, end_at_column, end_at_null)
-          define_out_of_time_scope(scope_method_name)
+          define_end_only_scope(suffix, end_at_column)
+          define_instance_method(suffix, start_at_column, start_at_null, end_at_column, end_at_null)
+          define_latest_one_scope(suffix, end_at_column)
+          define_earliest_one_scope(suffix, end_at_column)
+          define_before_scope(suffix, start_at_column, start_at_null)
+          define_after_scope(suffix, end_at_column, end_at_null)
+          define_out_of_time_scope(suffix)
         end
       else
         # Both start and end
-        define_full_scope(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
-        define_instance_method(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
-        define_before_scope(scope_method_name, start_at_column, start_at_null)
-        define_after_scope(scope_method_name, end_at_column, end_at_null)
-        define_out_of_time_scope(scope_method_name)
+        define_full_scope(suffix, start_at_column, start_at_null, end_at_column, end_at_null)
+        define_instance_method(suffix, start_at_column, start_at_null, end_at_column, end_at_null)
+        define_before_scope(suffix, start_at_column, start_at_null)
+        define_after_scope(suffix, end_at_column, end_at_null)
+        define_out_of_time_scope(suffix)
       end
     end
 
     # Defines a scope and instance method that raise ConfigurationError
     #
-    # @param scope_method_name [Symbol] The name of the scope method
+    # @param suffix [String] The suffix for method names
     # @param message [String] The error message
     # @return [void]
     # @api private
-    def define_error_scope_and_method(scope_method_name, message)
+    def define_error_scope_and_method(suffix, message)
       method_names = [
-        scope_method_name,
-        inverse_method_name(:before, scope_method_name),
-        inverse_method_name(:after, scope_method_name),
-        inverse_method_name(:out_of, scope_method_name)
+        :"in_time#{suffix}",
+        :"before_in_time#{suffix}",
+        :"after_in_time#{suffix}",
+        :"out_of_time#{suffix}"
       ]
 
       method_names.each do |method_name|
@@ -190,14 +174,14 @@ module InTimeScope
 
     # Defines a start-only scope (for history tracking pattern)
     #
-    # @param scope_method_name [Symbol] The name of the scope method
+    # @param suffix [String] The suffix for method names
     # @param column [Symbol] The start column name
     # @return [void]
     # @api private
-    def define_start_only_scope(scope_method_name, column)
+    def define_start_only_scope(suffix, column)
       # Simple scope - WHERE only, no ORDER BY
       # Users can add .order(start_at: :desc) externally if needed
-      scope scope_method_name, ->(time = Time.current) {
+      scope :"in_time#{suffix}", ->(time = Time.current) {
         where(column => ..time)
       }
     end
@@ -207,7 +191,7 @@ module InTimeScope
     # This scope efficiently finds the latest record per foreign key,
     # suitable for use with has_one associations and includes.
     #
-    # @param scope_method_name [Symbol] The base scope method name
+    # @param suffix [String] The suffix for method names
     # @param column [Symbol] The timestamp column name
     # @return [void]
     #
@@ -215,11 +199,9 @@ module InTimeScope
     #   has_one :current_price, -> { latest_in_time(:user_id) }, class_name: 'Price'
     #
     # @api private
-    def define_latest_one_scope(scope_method_name, column)
-      latest_method_name = scope_method_name == :in_time ? :latest_in_time : :"latest_#{scope_method_name}"
-
+    def define_latest_one_scope(suffix, column)
       # NOT EXISTS approach: select records where no later record exists for the same foreign key
-      scope latest_method_name, ->(foreign_key, time = Time.current) {
+      scope :"latest_in_time#{suffix}", ->(foreign_key, time = Time.current) {
         p2 = arel_table.alias("p2")
 
         subquery = Arel::SelectManager.new(arel_table)
@@ -241,7 +223,7 @@ module InTimeScope
     # This scope efficiently finds the earliest record per foreign key,
     # suitable for use with has_one associations and includes.
     #
-    # @param scope_method_name [Symbol] The base scope method name
+    # @param suffix [String] The suffix for method names
     # @param column [Symbol] The timestamp column name
     # @return [void]
     #
@@ -249,11 +231,9 @@ module InTimeScope
     #   has_one :first_price, -> { earliest_in_time(:user_id) }, class_name: 'Price'
     #
     # @api private
-    def define_earliest_one_scope(scope_method_name, column)
-      earliest_method_name = scope_method_name == :in_time ? :earliest_in_time : :"earliest_#{scope_method_name}"
-
+    def define_earliest_one_scope(suffix, column)
       # NOT EXISTS approach: select records where no earlier record exists for the same foreign key
-      scope earliest_method_name, ->(foreign_key, time = Time.current) {
+      scope :"earliest_in_time#{suffix}", ->(foreign_key, time = Time.current) {
         p2 = arel_table.alias("p2")
 
         subquery = Arel::SelectManager.new(arel_table)
@@ -272,27 +252,27 @@ module InTimeScope
 
     # Defines an end-only scope (for expiration pattern)
     #
-    # @param scope_method_name [Symbol] The name of the scope method
+    # @param suffix [String] The suffix for method names
     # @param column [Symbol] The end column name
     # @return [void]
     # @api private
-    def define_end_only_scope(scope_method_name, column)
-      scope scope_method_name, ->(time = Time.current) {
+    def define_end_only_scope(suffix, column)
+      scope :"in_time#{suffix}", ->(time = Time.current) {
         where.not(column => ..time)
       }
     end
 
     # Defines a full scope with both start and end columns
     #
-    # @param scope_method_name [Symbol] The name of the scope method
+    # @param suffix [String] The suffix for method names
     # @param start_column [Symbol] The start column name
     # @param start_null [Boolean] Whether start column allows NULL
     # @param end_column [Symbol] The end column name
     # @param end_null [Boolean] Whether end column allows NULL
     # @return [void]
     # @api private
-    def define_full_scope(scope_method_name, start_column, start_null, end_column, end_null)
-      scope scope_method_name, ->(time = Time.current) {
+    def define_full_scope(suffix, start_column, start_null, end_column, end_null)
+      scope :"in_time#{suffix}", ->(time = Time.current) {
         start_scope = if start_null
                         where(start_column => nil).or(where(start_column => ..time))
                       else

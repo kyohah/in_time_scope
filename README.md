@@ -151,7 +151,6 @@ Article.out_of_time_published     # Not currently published
 | `end_at: { column: }` | Custom column name, `nil` to disable | `end_at: { column: nil }` |
 | `start_at: { null: }` | Force NULL handling | `start_at: { null: false }` |
 | `end_at: { null: }` | Force NULL handling | `end_at: { null: true }` |
-| `prefix: true` | Use `published_in_time` instead of `in_time_published` | `in_time_scope :published, prefix: true` |
 
 ## Acknowledgements
 
