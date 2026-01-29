@@ -3,16 +3,102 @@
 require "active_record"
 require_relative "in_time_scope/version"
 
+# InTimeScope provides time-window scopes for ActiveRecord models.
+#
+# It allows you to easily query records that fall within specific time periods,
+# with support for nullable columns, custom column names, and multiple scopes per model.
+#
+# @example Basic usage with nullable columns
+#   class Event < ActiveRecord::Base
+#     include InTimeScope
+#     in_time_scope
+#   end
+#
+#   Event.in_time                    # Records active at current time
+#   Event.in_time(some_time)         # Records active at specific time
+#   event.in_time?                   # Check if record is active now
+#
+# @example Start-only pattern (history tracking)
+#   class Price < ActiveRecord::Base
+#     include InTimeScope
+#     in_time_scope start_at: { null: false }, end_at: { column: nil }
+#   end
+#
+# @example End-only pattern (expiration)
+#   class Coupon < ActiveRecord::Base
+#     include InTimeScope
+#     in_time_scope start_at: { column: nil }, end_at: { null: false }
+#   end
+#
+# @see ClassMethods#in_time_scope
 module InTimeScope
+  # Base error class for InTimeScope errors
   class Error < StandardError; end
+
+  # Raised when a specified column does not exist on the table
+  # @note This error is raised at class load time
   class ColumnNotFoundError < Error; end
+
+  # Raised when the scope configuration is invalid
+  # @note This error is raised when the scope or instance method is called
   class ConfigurationError < Error; end
 
+  # Hook called when InTimeScope is included in a model
+  #
+  # @param model [Class] The ActiveRecord model class
+  # @return [void]
+  # @api private
   def self.included(model)
     model.extend ClassMethods
   end
 
+  # Class methods added to ActiveRecord models when InTimeScope is included
   module ClassMethods
+    # Defines time-window scopes for the model.
+    #
+    # This method creates both a class-level scope and an instance method
+    # to check if records fall within a specified time window.
+    #
+    # @param scope_name [Symbol] The name of the scope (default: :in_time)
+    #   When not :in_time, columns default to `<scope_name>_start_at` and `<scope_name>_end_at`
+    #
+    # @param start_at [Hash] Configuration for the start column
+    # @option start_at [Symbol, nil] :column Column name (nil to disable start boundary)
+    # @option start_at [Boolean] :null Whether the column allows NULL values
+    #   (auto-detected from schema if not specified)
+    #
+    # @param end_at [Hash] Configuration for the end column
+    # @option end_at [Symbol, nil] :column Column name (nil to disable end boundary)
+    # @option end_at [Boolean] :null Whether the column allows NULL values
+    #   (auto-detected from schema if not specified)
+    #
+    # @param prefix [Boolean] If true, creates `<scope_name>_in_time` instead of `in_time_<scope_name>`
+    #
+    # @raise [ColumnNotFoundError] When a specified column doesn't exist (at class load time)
+    # @raise [ConfigurationError] When both columns are nil, or when using start-only/end-only
+    #   pattern with a nullable column (at scope call time)
+    #
+    # @example Default scope with nullable columns
+    #   in_time_scope
+    #   # Creates: Model.in_time, model.in_time?
+    #
+    # @example Named scope
+    #   in_time_scope :published
+    #   # Creates: Model.in_time_published, model.in_time_published?
+    #   # Uses: published_start_at, published_end_at columns
+    #
+    # @example Custom columns
+    #   in_time_scope start_at: { column: :available_at }, end_at: { column: :expired_at }
+    #
+    # @example Start-only pattern (for history tracking)
+    #   in_time_scope start_at: { null: false }, end_at: { column: nil }
+    #   # Also creates: Model.latest_in_time(:foreign_key), Model.earliest_in_time(:foreign_key)
+    #
+    # @example End-only pattern (for expiration)
+    #   in_time_scope start_at: { column: nil }, end_at: { null: false }
+    #   # Also creates: Model.latest_in_time(:foreign_key), Model.earliest_in_time(:foreign_key)
+    #
+    # @return [void]
     def in_time_scope(scope_name = :in_time, start_at: {}, end_at: {}, prefix: false)
       table_column_hash = columns_hash
       time_column_prefix = scope_name == :in_time ? "" : "#{scope_name}_"
@@ -30,6 +116,14 @@ module InTimeScope
 
     private
 
+    # Fetches the null option for a column, auto-detecting from schema if not specified
+    #
+    # @param config [Hash] Configuration hash with optional :null key
+    # @param column [Symbol, nil] Column name
+    # @param table_column_hash [Hash] Hash of column metadata from ActiveRecord
+    # @return [Boolean, nil] Whether the column allows NULL values
+    # @raise [ColumnNotFoundError] When the column doesn't exist in the table
+    # @api private
     def fetch_null_option(config, column, table_column_hash)
       return nil if column.nil?
       return config[:null] if config.key?(:null)
@@ -40,12 +134,27 @@ module InTimeScope
       column_info.null
     end
 
+    # Generates the method name for the scope
+    #
+    # @param scope_name [Symbol] The scope name
+    # @param prefix [Boolean] Whether to use prefix style
+    # @return [Symbol] The generated method name
+    # @api private
     def method_name(scope_name, prefix)
       return :in_time if scope_name == :in_time
 
       prefix ? "#{scope_name}_in_time" : "in_time_#{scope_name}"
     end
 
+    # Defines the appropriate scope methods based on configuration
+    #
+    # @param scope_method_name [Symbol] The name of the scope method to create
+    # @param start_at_column [Symbol, nil] Start column name
+    # @param start_at_null [Boolean, nil] Whether start column allows NULL
+    # @param end_at_column [Symbol, nil] End column name
+    # @param end_at_null [Boolean, nil] Whether end column allows NULL
+    # @return [void]
+    # @api private
     def define_scope_methods(scope_method_name, start_at_column:, start_at_null:, end_at_column:, end_at_null:)
       # Define class-level scope and instance method
       if start_at_column.nil? && end_at_column.nil?
@@ -78,6 +187,12 @@ module InTimeScope
       end
     end
 
+    # Defines a scope and instance method that raise ConfigurationError
+    #
+    # @param scope_method_name [Symbol] The name of the scope method
+    # @param message [String] The error message
+    # @return [void]
+    # @api private
     def define_error_scope_and_method(scope_method_name, message)
       err_message = message
 
@@ -90,6 +205,12 @@ module InTimeScope
       end
     end
 
+    # Defines a start-only scope (for history tracking pattern)
+    #
+    # @param scope_method_name [Symbol] The name of the scope method
+    # @param column [Symbol] The start column name
+    # @return [void]
+    # @api private
     def define_start_only_scope(scope_method_name, column)
       col = column
 
@@ -105,6 +226,19 @@ module InTimeScope
       define_earliest_one_scope(scope_method_name, column)
     end
 
+    # Defines the latest_in_time scope using NOT EXISTS subquery
+    #
+    # This scope efficiently finds the latest record per foreign key,
+    # suitable for use with has_one associations and includes.
+    #
+    # @param scope_method_name [Symbol] The base scope method name
+    # @param column [Symbol] The timestamp column name
+    # @return [void]
+    #
+    # @example Usage with has_one
+    #   has_one :current_price, -> { latest_in_time(:user_id) }, class_name: 'Price'
+    #
+    # @api private
     def define_latest_one_scope(scope_method_name, column)
       latest_method_name = scope_method_name == :in_time ? :latest_in_time : :"latest_#{scope_method_name}"
       col = column
@@ -127,6 +261,19 @@ module InTimeScope
       }
     end
 
+    # Defines the earliest_in_time scope using NOT EXISTS subquery
+    #
+    # This scope efficiently finds the earliest record per foreign key,
+    # suitable for use with has_one associations and includes.
+    #
+    # @param scope_method_name [Symbol] The base scope method name
+    # @param column [Symbol] The timestamp column name
+    # @return [void]
+    #
+    # @example Usage with has_one
+    #   has_one :first_price, -> { earliest_in_time(:user_id) }, class_name: 'Price'
+    #
+    # @api private
     def define_earliest_one_scope(scope_method_name, column)
       earliest_method_name = scope_method_name == :in_time ? :earliest_in_time : :"earliest_#{scope_method_name}"
       col = column
@@ -149,6 +296,12 @@ module InTimeScope
       }
     end
 
+    # Defines an end-only scope (for expiration pattern)
+    #
+    # @param scope_method_name [Symbol] The name of the scope method
+    # @param column [Symbol] The end column name
+    # @return [void]
+    # @api private
     def define_end_only_scope(scope_method_name, column)
       col = column
 
@@ -161,6 +314,15 @@ module InTimeScope
       define_earliest_one_scope(scope_method_name, column)
     end
 
+    # Defines a full scope with both start and end columns
+    #
+    # @param scope_method_name [Symbol] The name of the scope method
+    # @param start_column [Symbol] The start column name
+    # @param start_null [Boolean] Whether start column allows NULL
+    # @param end_column [Symbol] The end column name
+    # @param end_null [Boolean] Whether end column allows NULL
+    # @return [void]
+    # @api private
     def define_full_scope(scope_method_name, start_column, start_null, end_column, end_null)
       s_col = start_column
       e_col = end_column
@@ -186,6 +348,15 @@ module InTimeScope
       # These scopes are only available for start-only or end-only patterns.
     end
 
+    # Defines the instance method to check if a record is within the time window
+    #
+    # @param scope_method_name [Symbol] The name of the scope method
+    # @param start_column [Symbol, nil] The start column name
+    # @param start_null [Boolean, nil] Whether start column allows NULL
+    # @param end_column [Symbol, nil] The end column name
+    # @param end_null [Boolean, nil] Whether end column allows NULL
+    # @return [void]
+    # @api private
     def define_instance_method(scope_method_name, start_column, start_null, end_column, end_null)
       define_method("#{scope_method_name}?") do |time = Time.current|
         start_ok = if start_column.nil?
