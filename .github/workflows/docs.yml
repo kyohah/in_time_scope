@@ -28,8 +28,10 @@ jobs:
         with:
           mdbook-version: 'latest'
 
-      - name: Install mdbook-i18n-helpers
+      - name: Install dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext
           cargo install mdbook-i18n-helpers
 
       - name: Build English documentation
