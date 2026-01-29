@@ -9,9 +9,6 @@
 
 # mdBook output
 /docs/book/
-
-# Backup files from msgmerge
-/docs/po/*.po~
 /.gem_rbs_collection/
 /rbs_collection.lock.yaml
 Gemfile.lock
