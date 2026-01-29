@@ -28,84 +28,57 @@ jobs:
         with:
           mdbook-version: 'latest'
 
+      - name: Install mdbook-i18n-helpers
+        run: |
+          cargo install mdbook-i18n-helpers
+
       - name: Build English documentation
-        run: mdbook build docs
+        working-directory: docs
+        run: mdbook build -d book/en
 
-      - name: Build Japanese documentation
+      - name: Generate POT and build Japanese documentation
+        working-directory: docs
         run: |
-          cat > docs/book.toml << 'EOF'
-          [book]
-          title = "InTimeScope"
-          authors = ["kyohah"]
-          language = "ja"
-          src = "ja"
+          # Generate POT file
+          MDBOOK_OUTPUT='{"xgettext": {}}' mdbook build -d po || true
 
-          [build]
-          build-dir = "book/ja"
+          # Initialize ja.po if not exists
+          if [ ! -f po/ja.po ] && [ -f po/messages.pot ]; then
+            msginit -i po/messages.pot -l ja -o po/ja.po --no-translator
+          fi
 
-          [output.html]
-          default-theme = "light"
-          preferred-dark-theme = "navy"
-          git-repository-url = "https://github.com/kyohah/in_time_scope"
-          EOF
-          mdbook build docs
+          # Build Japanese (will use English if no translations)
+          MDBOOK_BOOK__LANGUAGE=ja mdbook build -d book/ja
 
-      - name: Build Chinese documentation
+      - name: Create language index
         run: |
-          cat > docs/book.toml << 'EOF'
-          [book]
-          title = "InTimeScope"
-          authors = ["kyohah"]
-          language = "zh"
-          src = "zh"
-
-          [build]
-          build-dir = "book/zh"
-
-          [output.html]
-          default-theme = "light"
-          preferred-dark-theme = "navy"
-          git-repository-url = "https://github.com/kyohah/in_time_scope"
+          cat > docs/book/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta http-equiv="refresh" content="0; url=en/">
+            <title>InTimeScope Documentation</title>
+            <style>
+              body { font-family: system-ui; max-width: 600px; margin: 50px auto; padding: 20px; }
+              h1 { color: #333; }
+              ul { list-style: none; padding: 0; }
+              li { margin: 10px 0; }
+              a { color: #0066cc; text-decoration: none; font-size: 18px; }
+              a:hover { text-decoration: underline; }
+            </style>
+          </head>
+          <body>
+            <h1>InTimeScope Documentation</h1>
+            <p>Select your language:</p>
+            <ul>
+              <li><a href="en/">English</a></li>
+              <li><a href="ja/">日本語</a></li>
+            </ul>
+            <p><small>Redirecting to English...</small></p>
+          </body>
+          </html>
           EOF
-          mdbook build docs
-
-      - name: Build German documentation
-        run: |
-          cat > docs/book.toml << 'EOF'
-          [book]
-          title = "InTimeScope"
-          authors = ["kyohah"]
-          language = "de"
-          src = "de"
-
-          [build]
-          build-dir = "book/de"
-
-          [output.html]
-          default-theme = "light"
-          preferred-dark-theme = "navy"
-          git-repository-url = "https://github.com/kyohah/in_time_scope"
-          EOF
-          mdbook build docs
-
-      - name: Build French documentation
-        run: |
-          cat > docs/book.toml << 'EOF'
-          [book]
-          title = "InTimeScope"
-          authors = ["kyohah"]
-          language = "fr"
-          src = "fr"
-
-          [build]
-          build-dir = "book/fr"
-
-          [output.html]
-          default-theme = "light"
-          preferred-dark-theme = "navy"
-          git-repository-url = "https://github.com/kyohah/in_time_scope"
-          EOF
-          mdbook build docs
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

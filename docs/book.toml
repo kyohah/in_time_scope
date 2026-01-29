@@ -2,7 +2,7 @@
 title = "InTimeScope"
 authors = ["kyohah"]
 language = "en"
-src = "en"
+src = "src"
 
 [build]
 build-dir = "book"
@@ -12,3 +12,7 @@ default-theme = "light"
 preferred-dark-theme = "navy"
 git-repository-url = "https://github.com/kyohah/in_time_scope"
 edit-url-template = "https://github.com/kyohah/in_time_scope/edit/main/docs/{path}"
+
+[preprocessor.gettext]
+po-dir = "po"
+optional = true
