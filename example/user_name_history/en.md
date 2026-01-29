@@ -2,6 +2,8 @@
 
 This example demonstrates how to manage user name history with `in_time_scope`, allowing you to query a user's name at any point in time.
 
+See also: [spec/user_name_history_spec.rb](../../spec/user_name_history_spec.rb)
+
 ## Use Case
 
 - Users can change their display name

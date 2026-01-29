@@ -69,6 +69,16 @@ ActiveRecord::Schema.define version: 0 do
     t.datetime :start_at, null: false
     t.timestamps
   end
+
+  # Member points with expiration (full time window pattern)
+  create_table :member_points, force: true do |t|
+    t.references :user, null: false
+    t.integer :amount, null: false
+    t.string :reason, null: false
+    t.datetime :start_at, null: false
+    t.datetime :end_at, null: false
+    t.timestamps
+  end
 end
 
 # Basic nullable time window
@@ -133,10 +143,26 @@ class UserNameHistory < ActiveRecord::Base
   in_time_scope start_at: { null: false }, end_at: { column: nil }
 end
 
+# Member points with expiration (full time window pattern)
+class MemberPoint < ActiveRecord::Base
+  include InTimeScope
+
+  belongs_to :user
+
+  # Both start_at and end_at are required
+  in_time_scope start_at: { null: false }, end_at: { null: false }
+
+  # Semantic aliases for inverse scopes
+  scope :pending, -> { before_in_time }
+  scope :expired, -> { after_in_time }
+  scope :invalid, -> { out_of_time }
+end
+
 # User for has_one association tests
 class User < ActiveRecord::Base
   has_many :prices
   has_many :user_name_histories
+  has_many :member_points
 
   # Simple approach: in_time + order (loads all matching records into memory)
   has_one :current_price,
@@ -166,5 +192,30 @@ class User < ActiveRecord::Base
   # Get name at a specific time
   def name_at(time)
     user_name_histories.in_time(time).order(start_at: :desc).first&.name
+  end
+
+  # Current valid points
+  def valid_points(time = Time.current)
+    member_points.in_time(time).sum(:amount)
+  end
+
+  # Pending points (not yet active)
+  def pending_points(time = Time.current)
+    member_points.before_in_time(time).sum(:amount)
+  end
+
+  # Expired points
+  def expired_points(time = Time.current)
+    member_points.after_in_time(time).sum(:amount)
+  end
+
+  # Grant monthly bonus (pre-scheduled)
+  def grant_monthly_bonus(amount:, months_valid: 6, base_time: Time.current)
+    member_points.create!(
+      amount: amount,
+      reason: "Monthly membership bonus",
+      start_at: base_time + 1.month,
+      end_at: base_time + (1 + months_valid).months
+    )
   end
 end
