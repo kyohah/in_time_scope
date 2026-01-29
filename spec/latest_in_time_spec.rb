@@ -133,7 +133,8 @@ RSpec.describe "latest_in_time scope (NOT EXISTS)" do
 
       sql = Price.latest_in_time(:user_id).to_sql
 
-      expect(sql).to include("NOT EXISTS")
+      # Arel generates "NOT (EXISTS ...)" syntax
+      expect(sql).to include("NOT (EXISTS")
     end
 
     it "in_time is simple WHERE only (no ORDER BY, no NOT EXISTS)" do
