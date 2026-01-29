@@ -130,6 +130,3 @@ end
 ActiveSupport.on_load(:active_record) do
   include InTimeScope
 end
-
-# Load rbs_rails extension if rbs_rails is available
-require_relative "in_time_scope/rbs_rails_ext" if defined?(RbsRails)
