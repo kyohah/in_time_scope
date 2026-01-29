@@ -1,4 +1,4 @@
-name: Deploy YARD Documentation
+name: Deploy RDoc Documentation
 
 on:
   push:
@@ -29,8 +29,8 @@ jobs:
           ruby-version: "3.1"
           bundler-cache: true
 
-      - name: Generate YARD documentation
-        run: bundle exec yard doc lib --output-dir doc
+      - name: Generate RDoc documentation
+        run: bundle exec rdoc lib --output doc --main README.md --title "InTimeScope"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
