@@ -8,10 +8,12 @@ require_relative "in_time_scope/version"
 # It allows you to easily query records that fall within specific time periods,
 # with support for nullable columns, custom column names, and multiple scopes per model.
 #
+# InTimeScope is automatically included in ActiveRecord::Base, so you can use
+# +in_time_scope+ directly in your models without explicit include.
+#
 # == Basic usage with nullable columns
 #
 #   class Event < ActiveRecord::Base
-#     include InTimeScope
 #     in_time_scope
 #   end
 #
@@ -22,14 +24,12 @@ require_relative "in_time_scope/version"
 # == Start-only pattern (history tracking)
 #
 #   class Price < ActiveRecord::Base
-#     include InTimeScope
 #     in_time_scope start_at: { null: false }, end_at: { column: nil }
 #   end
 #
 # == End-only pattern (expiration)
 #
 #   class Coupon < ActiveRecord::Base
-#     include InTimeScope
 #     in_time_scope start_at: { column: nil }, end_at: { null: false }
 #   end
 #

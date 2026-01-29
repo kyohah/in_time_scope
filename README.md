@@ -30,8 +30,6 @@ create_table :events do |t|
 end
 
 class Event < ActiveRecord::Base
-  include InTimeScope
-
   # Uses start_at / end_at by default
   in_time_scope
 end
@@ -72,8 +70,6 @@ Event.in_time(Time.parse("2024-06-01 12:00:00"))
 # => SELECT "events".* FROM "events" WHERE ("events"."start_at" <= '2024-06-01 12:00:00.000000') AND ("events"."end_at" > '2024-06-01 12:00:00.000000')
 
 class Event < ActiveRecord::Base
-  include InTimeScope
-
   # Explicitly mark columns as NOT NULL (even if the DB allows NULL)
   in_time_scope start_at: { null: false }, end_at: { null: false }
 end
@@ -103,8 +99,6 @@ If your table still has an `end_at` column but you want to ignore it, disable it
 
 ```ruby
 class Event < ActiveRecord::Base
-  include InTimeScope
-
   # Ignore end_at even if the column exists
   in_time_scope start_at: { null: false }, end_at: { column: nil }
 end
@@ -138,8 +132,6 @@ If your table still has a `start_at` column but you want to ignore it, disable i
 
 ```ruby
 class Event < ActiveRecord::Base
-  include InTimeScope
-
   # Ignore start_at and only use end_at
   in_time_scope start_at: { column: nil }, end_at: { null: false }
 end
@@ -168,8 +160,6 @@ create_table :events do |t|
 end
 
 class Event < ActiveRecord::Base
-  include InTimeScope
-
   # Use different column names
   in_time_scope start_at: { column: :available_at }, end_at: { column: :expired_at }
 
@@ -189,8 +179,6 @@ Use the `prefix: true` option if you prefer the scope name as a prefix instead o
 
 ```ruby
 class Event < ActiveRecord::Base
-  include InTimeScope
-
   # With prefix: true, the method name becomes published_in_time instead of in_time_published
   in_time_scope :published, prefix: true
 end
@@ -211,7 +199,6 @@ The start-only and end-only patterns provide `latest_in_time` and `earliest_in_t
 
 ```ruby
 class Price < ActiveRecord::Base
-  include InTimeScope
   belongs_to :user
 
   in_time_scope start_at: { null: false }, end_at: { column: nil }
@@ -283,8 +270,6 @@ If you specify a scope name but the expected columns don't exist, a `ColumnNotFo
 
 ```ruby
 class Event < ActiveRecord::Base
-  include InTimeScope
-
   # This will raise ColumnNotFoundError if hoge_start_at or hoge_end_at columns don't exist
   in_time_scope :hoge
 end
