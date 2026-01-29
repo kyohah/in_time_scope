@@ -11,8 +11,6 @@ module InTimeScope
   end
 
   module ClassMethods
-    # default: in_time
-    # end_atはカラムからとってくる
     def in_time_scope(scope_name = :in_time, start_at: {}, end_at: {}, prefix: false)
       table_column_hash = columns_hash
       time_column_prefix = scope_name == :in_time ? "" : "#{scope_name}_"
@@ -72,7 +70,7 @@ module InTimeScope
       # Efficient scope for has_one + includes using NOT EXISTS subquery
       # Usage: has_one :current_price, -> { latest_in_time(:user_id) }, class_name: 'Price'
       define_latest_one_scope(scope_method_name, start_column, start_null)
-      define_oldest_one_scope(scope_method_name, start_column, start_null)
+      define_earliest_one_scope(scope_method_name, start_column, start_null)
     end
 
     def define_latest_one_scope(scope_method_name, start_column, start_null)
@@ -119,40 +117,39 @@ module InTimeScope
       }
     end
 
-    def define_oldest_one_scope(scope_method_name, start_column, start_null)
-      oldest_method_name = scope_method_name == :in_time ? :oldest_in_time : :"oldest_#{scope_method_name}"
+    def define_earliest_one_scope(scope_method_name, start_column, start_null)
+      earliest_method_name = scope_method_name == :in_time ? :earliest_in_time : :"earliest_#{scope_method_name}"
       tbl = table_name
       col = start_column
-      scope oldest_method_name, ->(foreign_key, time = Time.current) {
+      scope earliest_method_name, ->(foreign_key, time = Time.current) {
         fk = foreign_key
-        exists_sql = if start_null
-                       <<~SQL.squish
-                         EXISTS (
-                           SELECT 1 FROM #{tbl} p2
-                            WHERE p2.#{fk} = #{tbl}.#{fk}
-                            AND (p2.#{col} IS NULL OR p2.#{col} <= ?)
-                            AND (p2.#{col} IS NULL OR p2.#{col} < #{tbl}.#{col} OR #{tbl}.#{col} IS NULL)
-                            AND p2.id != #{tbl}.id
-                         )
-                       SQL
-                     else
-                       <<~SQL.squish
-                         EXISTS (
-                           SELECT 1 FROM #{tbl} p2
-                            WHERE p2.#{fk} = #{tbl}.#{fk}
-                            AND p2.#{col} <= ?
-                            AND p2.#{col} < #{tbl}.#{col}
-                            AND p2.id != #{tbl}.id
-                         )
-                       SQL
-                     end
+        not_exists_sql = if start_null
+                           <<~SQL.squish
+                             NOT EXISTS (
+                               SELECT 1 FROM #{tbl} p2
+                               WHERE p2.#{fk} = #{tbl}.#{fk}
+                               AND (p2.#{col} IS NULL OR p2.#{col} <= ?)
+                               AND (p2.#{col} IS NULL OR p2.#{col} < #{tbl}.#{col} OR #{tbl}.#{col} IS NULL)
+                               AND p2.id != #{tbl}.id
+                             )
+                           SQL
+                         else
+                           <<~SQL.squish
+                             NOT EXISTS (
+                               SELECT 1 FROM #{tbl} p2
+                               WHERE p2.#{fk} = #{tbl}.#{fk}
+                               AND p2.#{col} <= ?
+                               AND p2.#{col} < #{tbl}.#{col}
+                             )
+                           SQL
+                         end
         base_condition = if start_null
                            where(arel_table[col].eq(nil).or(arel_table[col].lteq(time)))
                          else
                            where(arel_table[col].lteq(time))
                          end
 
-        base_condition.where(exists_sql, time)
+        base_condition.where(not_exists_sql, time)
       }
     end
 
@@ -168,7 +165,7 @@ module InTimeScope
       end
 
       define_latest_one_scope(scope_method_name, end_column, end_null)
-      define_oldest_one_scope(scope_method_name, end_column, end_null)
+      define_earliest_one_scope(scope_method_name, end_column, end_null)
     end
 
     def define_full_scope(scope_method_name, start_column, start_null, end_column, end_null)
@@ -189,7 +186,7 @@ module InTimeScope
       }
 
       define_latest_one_scope(scope_method_name, start_column, start_null)
-      define_oldest_one_scope(scope_method_name, start_column, start_null)
+      define_earliest_one_scope(scope_method_name, start_column, start_null)
     end
 
     def define_instance_method(scope_method_name, start_column, start_null, end_column, end_null)

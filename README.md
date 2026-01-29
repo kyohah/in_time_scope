@@ -1,8 +1,6 @@
 # InTimeScope
 
-TODO: Delete this and the text below, and describe your gem
-
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/in_time_scope`. To experiment with that code, run `bin/console` for an interactive prompt.
+A Ruby gem that adds time-window scopes to ActiveRecord models. It provides a convenient way to query records that fall within specific time periods (between `start_at` and `end_at` timestamps), with support for nullable columns, custom column names, and multiple scopes per model.
 
 ## Installation
 
@@ -39,11 +37,10 @@ class Event < ActiveRecord::Base
 end
 
 Event.in_time
-# => SELECT "events".* FROM "events" WHERE ("events"."start_at" IS NULL OR "events"."start_at" <= '2026-01-24 19:50:05.738232') AND ("events"."end_at" IS NULL OR "events"."end_at" > '2026-01-24 19:50:05.738232') /* loading for pp */ LIMIT $1  [["LIMIT", 11]]
+# => SELECT "events".* FROM "events" WHERE ("events"."start_at" IS NULL OR "events"."start_at" <= '2026-01-24 19:50:05.738232') AND ("events"."end_at" IS NULL OR "events"."end_at" > '2026-01-24 19:50:05.738232')
 
 # Check at a specific time
 Event.in_time(Time.parse("2024-06-01 12:00:00"))
-# => SELECT "events".* FROM "events" WHERE ("events"."start_at" IS NULL OR "events"."start_at" <= '2024-06-01 12:00:00.000000') AND ("events"."end_at" IS NULL OR "events"."end_at" > '2024-06-01 12:00:00.000000') /* loading for pp */ LIMIT $1  [["LIMIT", 11]]
 
 # Is the current time within the window?
 event = Event.first
@@ -68,11 +65,11 @@ end
 
 # Column metadata is read when Rails boots; SQL is optimized for NOT NULL columns.
 Event.in_time
-# => SELECT "events".* FROM "events" WHERE ("events"."start_at" <= '2026-01-24 19:50:05.738232') AND ("events"."end_at" > '2026-01-24 19:50:05.738232') /* loading for pp */ LIMIT $1  [["LIMIT", 11]]
+# => SELECT "events".* FROM "events" WHERE ("events"."start_at" <= '2026-01-24 19:50:05.738232') AND ("events"."end_at" > '2026-01-24 19:50:05.738232')
 
 # Check at a specific time
 Event.in_time(Time.parse("2024-06-01 12:00:00"))
-# => SELECT "events".* FROM "events" WHERE ("events"."start_at" <= '2024-06-01 12:00:00.000000') AND ("events"."end_at" > '2024-06-01 12:00:00.000000') /* loading for pp */ LIMIT $1  [["LIMIT", 11]]
+# => SELECT "events".* FROM "events" WHERE ("events"."start_at" <= '2024-06-01 12:00:00.000000') AND ("events"."end_at" > '2024-06-01 12:00:00.000000')
 
 class Event < ActiveRecord::Base
   include InTimeScope
@@ -113,20 +110,16 @@ class Event < ActiveRecord::Base
 end
 
 Event.in_time(Time.parse("2024-06-01 12:00:00"))
-# => SELECT "events".* FROM "events" WHERE "events"."start_at" <= '2024-06-01 12:00:00.000000' ORDER BY "events"."start_at" DESC
+# => SELECT "events".* FROM "events" WHERE "events"."start_at" <= '2024-06-01 12:00:00.000000'
 
-# Use .first to get the most recent single record
-Event.in_time.first
-# => SELECT "events".* FROM "events" WHERE "events"."start_at" <= '...' ORDER BY "events"."start_at" DESC LIMIT 1
+# Use .first with order to get the most recent single record
+Event.in_time.order(start_at: :desc).first
 ```
 
 With no `end_at`, each row implicitly ends at the next row's `start_at`.
-The scope returns all matching records ordered by `start_at DESC`, so:
-- Use `.first` for a single record
-- Use with `has_one` associations for per-parent record selection
-
-Boundary behavior is stable:
-- `start_at <= NOW()` picks the newest row whose start has passed
+The scope returns all matching records (WHERE only, no ORDER), so:
+- Add `.order(start_at: :desc).first` for a single latest record
+- Use `latest_in_time` for efficient `has_one` associations
 
 Recommended index:
 
@@ -152,15 +145,7 @@ class Event < ActiveRecord::Base
 end
 
 Event.in_time(Time.parse("2024-06-01 12:00:00"))
-# => SELECT "events".* FROM "events" WHERE ("events"."end_at" IS NULL OR "events"."end_at" > '2024-06-01 12:00:00.000000') /* loading for pp */ LIMIT $1  [["LIMIT", 11]]
-```
-
-To fetch active rows:
-
-```sql
-SELECT *
-FROM events
-WHERE end_at IS NULL OR end_at > NOW();
+# => SELECT "events".* FROM "events" WHERE ("events"."end_at" IS NULL OR "events"."end_at" > '2024-06-01 12:00:00.000000')
 ```
 
 Recommended index:
@@ -216,7 +201,7 @@ Event.published_in_time
 
 ### Using with `has_one` Associations
 
-The start-only pattern provides two scopes for `has_one` associations:
+The start-only pattern provides scopes for `has_one` associations:
 
 #### Simple approach: `in_time` + `order`
 
@@ -265,6 +250,46 @@ end
 ```
 
 The `latest_in_time(:foreign_key)` scope uses a `NOT EXISTS` subquery to filter at the database level, avoiding loading unnecessary records into memory.
+
+#### Getting the earliest record: `earliest_in_time`
+
+```ruby
+class User < ActiveRecord::Base
+  has_many :prices
+
+  # Uses NOT EXISTS subquery - only loads the earliest record per user
+  has_one :first_price,
+          -> { earliest_in_time(:user_id) },
+          class_name: "Price"
+end
+
+# Direct access
+user.first_price
+# => Returns the earliest price where start_at <= Time.current
+
+# Efficient with includes
+User.includes(:first_price).each do |user|
+  puts user.first_price&.amount
+end
+```
+
+The `earliest_in_time(:foreign_key)` scope uses a `NOT EXISTS` subquery to find records where no earlier record exists for the same foreign key.
+
+### Error Handling
+
+If you specify a scope name but the expected columns don't exist, an error is raised at class load time:
+
+```ruby
+class Event < ActiveRecord::Base
+  include InTimeScope
+
+  # This will raise NoMethodError if hoge_start_at or hoge_end_at columns don't exist
+  in_time_scope :hoge
+end
+# => NoMethodError: undefined method `null' for nil:NilClass
+```
+
+This helps catch configuration errors early during development.
 
 ## Development
 

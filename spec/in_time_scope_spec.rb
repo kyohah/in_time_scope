@@ -283,4 +283,111 @@ RSpec.describe InTimeScope do
       expect(result).to eq([target])
     end
   end
+
+  describe "latest_in_time scope" do
+    it "returns only the latest record per foreign key" do
+      user1 = User.create!(name: "User1")
+      user2 = User.create!(name: "User2")
+
+      old_price1 = Price.create!(user: user1, amount: 100, start_at: Time.local(2024, 5, 1))
+      new_price1 = Price.create!(user: user1, amount: 200, start_at: Time.local(2024, 6, 1))
+      old_price2 = Price.create!(user: user2, amount: 150, start_at: Time.local(2024, 5, 15))
+      new_price2 = Price.create!(user: user2, amount: 250, start_at: Time.local(2024, 6, 10))
+
+      result = Price.latest_in_time(:user_id, now)
+
+      expect(result).to contain_exactly(new_price1, new_price2)
+      expect(result).not_to include(old_price1, old_price2)
+    end
+
+    it "works with has_one association" do
+      user = User.create!(name: "Test User")
+      Price.create!(user: user, amount: 100, start_at: Time.local(2024, 5, 1))
+      latest = Price.create!(user: user, amount: 200, start_at: Time.local(2024, 6, 1))
+
+      allow(Time).to receive(:current).and_return(now)
+
+      expect(user.current_price_efficient).to eq(latest)
+    end
+
+    it "works efficiently with includes" do
+      user1 = User.create!(name: "User1")
+      user2 = User.create!(name: "User2")
+      Price.create!(user: user1, amount: 100, start_at: Time.local(2024, 5, 1))
+      latest1 = Price.create!(user: user1, amount: 200, start_at: Time.local(2024, 6, 1))
+      Price.create!(user: user2, amount: 150, start_at: Time.local(2024, 5, 15))
+      latest2 = Price.create!(user: user2, amount: 250, start_at: Time.local(2024, 6, 10))
+
+      allow(Time).to receive(:current).and_return(now)
+
+      users = User.includes(:current_price_efficient).to_a
+
+      expect(users.find { |u| u.id == user1.id }.current_price_efficient).to eq(latest1)
+      expect(users.find { |u| u.id == user2.id }.current_price_efficient).to eq(latest2)
+    end
+  end
+
+  describe "earliest_in_time scope" do
+    it "returns only the earliest record per foreign key" do
+      user1 = User.create!(name: "User1")
+      user2 = User.create!(name: "User2")
+
+      old_price1 = Price.create!(user: user1, amount: 100, start_at: Time.local(2024, 5, 1))
+      Price.create!(user: user1, amount: 200, start_at: Time.local(2024, 6, 1))
+      old_price2 = Price.create!(user: user2, amount: 150, start_at: Time.local(2024, 5, 15))
+      Price.create!(user: user2, amount: 250, start_at: Time.local(2024, 6, 10))
+
+      result = Price.earliest_in_time(:user_id, now)
+
+      expect(result).to contain_exactly(old_price1, old_price2)
+    end
+
+    it "works with has_one association" do
+      user = User.create!(name: "Test User")
+      earliest = Price.create!(user: user, amount: 100, start_at: Time.local(2024, 5, 1))
+      Price.create!(user: user, amount: 200, start_at: Time.local(2024, 6, 1))
+
+      allow(Time).to receive(:current).and_return(now)
+
+      expect(user.earliest_price_efficient).to eq(earliest)
+    end
+
+    it "works efficiently with includes" do
+      user1 = User.create!(name: "User1")
+      user2 = User.create!(name: "User2")
+      earliest1 = Price.create!(user: user1, amount: 100, start_at: Time.local(2024, 5, 1))
+      Price.create!(user: user1, amount: 200, start_at: Time.local(2024, 6, 1))
+      earliest2 = Price.create!(user: user2, amount: 150, start_at: Time.local(2024, 5, 15))
+      Price.create!(user: user2, amount: 250, start_at: Time.local(2024, 6, 10))
+
+      allow(Time).to receive(:current).and_return(now)
+
+      users = User.includes(:earliest_price_efficient).to_a
+
+      expect(users.find { |u| u.id == user1.id }.earliest_price_efficient).to eq(earliest1)
+      expect(users.find { |u| u.id == user2.id }.earliest_price_efficient).to eq(earliest2)
+    end
+  end
+
+  describe "prefix option" do
+    it "creates scope with prefix style name when prefix: true" do
+      # Article uses in_time_scope :published without prefix
+      # so it creates in_time_published method
+      expect(Article).to respond_to(:in_time_published)
+      expect(Article.new).to respond_to(:in_time_published?)
+    end
+  end
+
+  describe "Error handling" do
+    it "raises error when column does not exist" do
+      expect do
+        Class.new(ActiveRecord::Base) do
+          self.table_name = "events"
+          include InTimeScope
+
+          in_time_scope :nonexistent
+        end
+      end.to raise_error(NoMethodError)
+    end
+  end
 end

@@ -89,7 +89,8 @@ class Article < ActiveRecord::Base
   include InTimeScope
 
   in_time_scope
-  in_time_scope :published, start_at: { column: :published_start_at, null: false }, end_at: { column: :published_end_at, null: false }
+  # Uses published_start_at / published_end_at by default (prefix pattern)
+  in_time_scope :published
 end
 
 # Start-only pattern
@@ -127,5 +128,10 @@ class User < ActiveRecord::Base
   # Efficient approach using NOT EXISTS (loads only the latest record per user)
   has_one :current_price_efficient,
           -> { latest_in_time(:user_id) },
+          class_name: "Price"
+
+  # Oldest price using EXISTS (loads the earliest record per user)
+  has_one :earliest_price_efficient,
+          -> { earliest_in_time(:user_id) },
           class_name: "Price"
 end
