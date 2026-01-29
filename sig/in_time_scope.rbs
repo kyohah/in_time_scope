@@ -1,4 +1,83 @@
+# Type definitions for InTimeScope gem
+
 module InTimeScope
   VERSION: String
-  # See the writing guide of rbs: https://github.com/ruby/rbs#guides
+
+  # Base error class for InTimeScope errors
+  class Error < StandardError
+  end
+
+  # Raised when a specified column does not exist on the table
+  class ColumnNotFoundError < Error
+  end
+
+  # Raised when the scope configuration is invalid
+  class ConfigurationError < Error
+  end
+
+  def self.included: (Class model) -> void
+
+  # Configuration options for start_at column
+  type start_at_config = {
+    ?column: Symbol?,
+    ?null: bool
+  }
+
+  # Configuration options for end_at column
+  type end_at_config = {
+    ?column: Symbol?,
+    ?null: bool
+  }
+
+  # Class methods added to ActiveRecord models when InTimeScope is included
+  module ClassMethods
+    # Defines time-window scopes for the model
+    #
+    # @param scope_name [Symbol] The name of the scope (default: :in_time)
+    # @param start_at [Hash] Configuration for the start column
+    # @param end_at [Hash] Configuration for the end column
+    # @param prefix [Boolean] If true, creates prefix-style method names
+    # @return [void]
+    # @raise [ColumnNotFoundError] When a specified column doesn't exist
+    # @raise [ConfigurationError] When the configuration is invalid (at scope call time)
+    def in_time_scope: (
+      ?Symbol scope_name,
+      ?start_at: start_at_config,
+      ?end_at: end_at_config,
+      ?prefix: bool
+    ) -> void
+
+    private
+
+    # Private implementation methods
+    # These use ActiveRecord internals and are typed as untyped for flexibility
+    def fetch_null_option: (untyped config, untyped column, untyped table_column_hash) -> untyped
+    def method_name: (Symbol scope_name, bool prefix) -> (Symbol | String)
+    def define_scope_methods: (untyped scope_method_name, start_at_column: untyped, start_at_null: untyped, end_at_column: untyped, end_at_null: untyped) -> void
+    def define_error_scope_and_method: (untyped scope_method_name, String message) -> void
+    def define_start_only_scope: (untyped scope_method_name, Symbol column) -> void
+    def define_latest_one_scope: (untyped scope_method_name, Symbol column) -> void
+    def define_earliest_one_scope: (untyped scope_method_name, Symbol column) -> void
+    def define_end_only_scope: (untyped scope_method_name, Symbol column) -> void
+    def define_full_scope: (untyped scope_method_name, Symbol start_column, untyped start_null, Symbol end_column, untyped end_null) -> void
+    def define_instance_method: (untyped scope_method_name, Symbol? start_column, untyped start_null, Symbol? end_column, untyped end_null) -> void
+  end
+end
+
+# Generated scope methods (dynamically defined)
+# When you call `in_time_scope` on a model, it creates these methods:
+#
+# Class methods:
+#   Model.in_time(time = Time.current) -> ActiveRecord::Relation
+#   Model.in_time_<name>(time = Time.current) -> ActiveRecord::Relation  (for named scopes)
+#   Model.latest_in_time(foreign_key, time = Time.current) -> ActiveRecord::Relation  (start-only/end-only)
+#   Model.earliest_in_time(foreign_key, time = Time.current) -> ActiveRecord::Relation (start-only/end-only)
+#
+# Instance methods:
+#   model.in_time?(time = Time.current) -> bool
+#   model.in_time_<name>?(time = Time.current) -> bool  (for named scopes)
+
+# Extend ActiveRecord::Base to include InTimeScope
+class ActiveRecord::Base
+  extend InTimeScope::ClassMethods
 end
