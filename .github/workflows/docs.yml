@@ -23,19 +23,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install mdBook and i18n-helpers
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gettext
-          cargo install mdbook mdbook-i18n-helpers
-
-      - name: Generate POT file
-        working-directory: docs
-        run: |
-          MDBOOK_OUTPUT='{"xgettext": {}}' mdbook build -d po
+      - name: Setup mdBook
+        uses: peaceiris/actions-mdbook@v2
+        with:
+          mdbook-version: 'latest'
 
       - name: Build English documentation
         working-directory: docs
@@ -43,19 +34,36 @@ jobs:
 
       - name: Build Japanese documentation
         working-directory: docs
-        run: MDBOOK_BOOK__LANGUAGE=ja mdbook build -d book/ja
+        run: |
+          # Use ja/ directory as source
+          sed -i 's|src = "src"|src = "ja"|' book.toml
+          sed -i 's|language = "en"|language = "ja"|' book.toml
+          mdbook build -d book/ja
+          git checkout book.toml
 
       - name: Build Chinese documentation
         working-directory: docs
-        run: MDBOOK_BOOK__LANGUAGE=zh mdbook build -d book/zh
+        run: |
+          sed -i 's|src = "src"|src = "zh"|' book.toml
+          sed -i 's|language = "en"|language = "zh"|' book.toml
+          mdbook build -d book/zh
+          git checkout book.toml
 
       - name: Build German documentation
         working-directory: docs
-        run: MDBOOK_BOOK__LANGUAGE=de mdbook build -d book/de
+        run: |
+          sed -i 's|src = "src"|src = "de"|' book.toml
+          sed -i 's|language = "en"|language = "de"|' book.toml
+          mdbook build -d book/de
+          git checkout book.toml
 
       - name: Build French documentation
         working-directory: docs
-        run: MDBOOK_BOOK__LANGUAGE=fr mdbook build -d book/fr
+        run: |
+          sed -i 's|src = "src"|src = "fr"|' book.toml
+          sed -i 's|language = "en"|language = "fr"|' book.toml
+          mdbook build -d book/fr
+          git checkout book.toml
 
       - name: Create language index
         run: |
