@@ -15,4 +15,3 @@ edit-url-template = "https://github.com/kyohah/in_time_scope/edit/main/docs/{pat
 
 [preprocessor.gettext]
 po-dir = "po"
-optional = true
