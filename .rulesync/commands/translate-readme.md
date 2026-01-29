@@ -1,32 +1,31 @@
 ---
 targets:
   - claudecode
-description: Translate README.md and example docs into multiple languages (ja, zh, fr, de)
+description: Translate README.md and docs into multiple languages (ja, zh, fr, de)
 ---
 
 # Translate Documentation
 
-Translate the README.md and example documentation into multiple languages.
+Translate the README.md and documentation into multiple languages.
 
 ## Instructions
 
 ### 1. Translate README.md
 
 1. Read the current README.md
-2. Create translated versions for each language:
-   - `README.ja.md` - Japanese (日本語)
-   - `README.zh.md` - Chinese (中文)
-   - `README.fr.md` - French (Français)
-   - `README.de.md` - German (Deutsch)
+2. Create translated versions in `docs/` directory:
+   - `docs/README.ja.md` - Japanese (日本語)
+   - `docs/README.zh.md` - Chinese (中文)
+   - `docs/README.fr.md` - French (Français)
+   - `docs/README.de.md` - German (Deutsch)
 
-### 2. Translate Example Documentation
+### 2. Translate mdBook Documentation
 
-1. Find all `en.md` files in the `example/` directory
-2. For each `en.md` file, create translated versions in the same directory:
-   - `ja.md` - Japanese (日本語)
-   - `zh.md` - Chinese (中文)
-   - `fr.md` - French (Français)
-   - `de.md` - German (Deutsch)
+1. Find all `.md` files in the `docs/en/` directory
+2. For each file, create/update translated versions in `docs/ja/`:
+   - `docs/ja/index.md` - Japanese version of index.md
+   - `docs/ja/point-system.md` - Japanese version of point-system.md
+   - `docs/ja/user-name-history.md` - Japanese version of user-name-history.md
 
 ### 3. Translation Guidelines
 
@@ -37,5 +36,6 @@ For each translation:
 - Keep URLs and links unchanged
 - Keep the language links at the top unchanged (for README only)
 - Translate code comments if they exist in text sections (not in code blocks)
+- Update SUMMARY.md for Japanese docs
 
 $ARGUMENTS

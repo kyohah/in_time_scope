@@ -1,6 +1,6 @@
 # InTimeScope
 
-[English](README.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [Français](README.fr.md) | [Deutsch](README.de.md)
+[English](../README.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [Français](README.fr.md) | [Deutsch](README.de.md)
 
 Vous écrivez ce code à chaque fois dans Rails ?
 

@@ -1,4 +1,4 @@
-name: Deploy RDoc Documentation
+name: Deploy mdBook Documentation
 
 on:
   push:
@@ -23,14 +23,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
+      - name: Setup mdBook
+        uses: peaceiris/actions-mdbook@v2
         with:
-          ruby-version: "3.1"
-          bundler-cache: true
+          mdbook-version: 'latest'
 
-      - name: Generate RDoc documentation
-        run: bundle exec rdoc lib --output doc --main README.md --title "InTimeScope"
+      - name: Build English documentation
+        run: mdbook build docs
+
+      - name: Build Japanese documentation
+        run: mdbook build docs --config docs/book.ja.toml --dest-dir book/ja
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -38,7 +40,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: doc
+          path: docs/book
 
   deploy:
     environment:
