@@ -68,7 +68,13 @@ module InTimeScope
 
       scope_method_name = method_name(scope_name, prefix)
 
-      define_scope_methods(scope_method_name, start_at_column:, start_at_null:, end_at_column:, end_at_null:)
+      define_scope_methods(
+        scope_method_name,
+        start_at_column: start_at_column,
+        start_at_null: start_at_null,
+        end_at_column: end_at_column,
+        end_at_null: end_at_null
+      )
     end
 
     private
