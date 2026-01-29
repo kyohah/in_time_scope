@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
   spec.description = "InTimeScope provides time-window scopes for ActiveRecord models."
   spec.homepage = "https://github.com/kyohah/in_time_scope"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.0.0"
+  spec.required_ruby_version = ">= 3.2.0"
 
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["rubygems_mfa_required"] = "true"
@@ -33,7 +33,7 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "activerecord", ">= 6.0"
+  spec.add_dependency "activerecord", ">= 7.2"
 
   spec.add_development_dependency "irb"
   spec.add_development_dependency "rake", "~> 13.0"
