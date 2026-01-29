@@ -433,3 +433,6 @@ end
 
 # Load Railtie for Rails integration (provides rake tasks)
 require_relative "in_time_scope/railtie" if defined?(Rails::Railtie)
+
+# Load rbs_rails extension if rbs_rails is available
+require_relative "in_time_scope/rbs_rails_ext" if defined?(RbsRails)

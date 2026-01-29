@@ -23,6 +23,17 @@ module InTimeScope
     def self.generate: (Class model, ?output_dir: String) -> String?
   end
 
+  # Extension for rbs_rails integration
+  module RbsRailsExt
+    module GeneratorExt
+      def in_time_scope_methods: () -> String
+    end
+
+    module KlassDeclPatch
+      def klass_decl: () -> String
+    end
+  end
+
   # Configuration options for start_at column
   type start_at_config = {
     ?column: Symbol?,
