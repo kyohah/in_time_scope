@@ -35,6 +35,9 @@ require_relative "in_time_scope/version"
 #
 # @see ClassMethods#in_time_scope
 module InTimeScope
+  # Lazy load RBS generator (not needed at runtime)
+  autoload :RbsGenerator, "in_time_scope/rbs_generator"
+
   # Base error class for InTimeScope errors
   class Error < StandardError; end
 
@@ -53,6 +56,14 @@ module InTimeScope
 
   # Class methods added to ActiveRecord models when InTimeScope is included
   module ClassMethods
+    # Returns the list of in_time_scope definitions for RBS generation
+    #
+    # @return [Array<Hash>] List of scope configurations
+    # @api private
+    def in_time_scope_definitions
+      @in_time_scope_definitions ||= []
+    end
+
     # Defines time-window scopes for the model.
     #
     # This method creates both a class-level scope and an instance method
@@ -118,6 +129,16 @@ module InTimeScope
 
       scope_method_name = method_name(scope_name, prefix)
 
+      # Store definition for RBS generation
+      pattern = determine_pattern(start_at_column, end_at_column)
+      in_time_scope_definitions << {
+        scope_name: scope_name,
+        scope_method_name: scope_method_name,
+        start_at_column: start_at_column,
+        end_at_column: end_at_column,
+        pattern: pattern
+      }
+
       define_scope_methods(scope_method_name, start_at_column:, start_at_null:, end_at_column:, end_at_null:)
     end
 
@@ -139,6 +160,24 @@ module InTimeScope
       raise ColumnNotFoundError, "Column '#{column}' does not exist on table '#{table_name}'" if column_info.nil?
 
       column_info.null
+    end
+
+    # Determines the pattern type based on column configuration
+    #
+    # @param start_at_column [Symbol, nil] Start column name
+    # @param end_at_column [Symbol, nil] End column name
+    # @return [Symbol] Pattern type (:full, :start_only, :end_only, :none)
+    # @api private
+    def determine_pattern(start_at_column, end_at_column)
+      if start_at_column && end_at_column
+        :full
+      elsif start_at_column
+        :start_only
+      elsif end_at_column
+        :end_only
+      else
+        :none
+      end
     end
 
     # Generates the method name for the scope
@@ -391,3 +430,6 @@ end
 ActiveSupport.on_load(:active_record) do
   include InTimeScope
 end
+
+# Load Railtie for Rails integration (provides rake tasks)
+require_relative "in_time_scope/railtie" if defined?(Rails::Railtie)
