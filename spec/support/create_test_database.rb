@@ -61,6 +61,14 @@ ActiveRecord::Schema.define version: 0 do
     t.datetime :expired_at, null: false
     t.timestamps
   end
+
+  # User name history (start-only pattern for version history)
+  create_table :user_name_histories, force: true do |t|
+    t.references :user, null: false
+    t.string :name, null: false
+    t.datetime :start_at, null: false
+    t.timestamps
+  end
 end
 
 # Basic nullable time window
@@ -116,9 +124,19 @@ class Price < ActiveRecord::Base
   in_time_scope start_at: { null: false }, end_at: { column: nil }
 end
 
+# User name history with start-only pattern
+class UserNameHistory < ActiveRecord::Base
+  include InTimeScope
+
+  belongs_to :user
+
+  in_time_scope start_at: { null: false }, end_at: { column: nil }
+end
+
 # User for has_one association tests
 class User < ActiveRecord::Base
   has_many :prices
+  has_many :user_name_histories
 
   # Simple approach: in_time + order (loads all matching records into memory)
   has_one :current_price,
@@ -134,4 +152,19 @@ class User < ActiveRecord::Base
   has_one :earliest_price_efficient,
           -> { earliest_in_time(:user_id) },
           class_name: "Price"
+
+  # Current name using latest_in_time (efficient)
+  has_one :current_name_history,
+          -> { latest_in_time(:user_id) },
+          class_name: "UserNameHistory"
+
+  # Convenience method for current name
+  def current_name
+    current_name_history&.name
+  end
+
+  # Get name at a specific time
+  def name_at(time)
+    user_name_histories.in_time(time).order(start_at: :desc).first&.name
+  end
 end
