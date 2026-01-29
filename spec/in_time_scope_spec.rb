@@ -383,4 +383,328 @@ RSpec.describe InTimeScope do
       end.to raise_error(InTimeScope::ColumnNotFoundError, /Column 'nonexistent_start_at' does not exist on table 'events'/)
     end
   end
+
+  describe "Inverse Scopes: before_in_time (not yet started)" do
+    describe ".before_in_time" do
+      it "returns records where start_at > time (nullable column)" do
+        not_started = Event.create!(start_at: future, end_at: nil)
+        started = Event.create!(start_at: past, end_at: future)
+        no_start = Event.create!(start_at: nil, end_at: future)
+
+        result = Event.before_in_time(now)
+
+        expect(result).to include(not_started)
+        expect(result).not_to include(started, no_start)
+      end
+
+      it "returns records where start_at > time (non-nullable column)" do
+        not_started = Campaign.create!(start_at: future, end_at: Time.local(2024, 7, 1))
+        started = Campaign.create!(start_at: past, end_at: future)
+
+        result = Campaign.before_in_time(now)
+
+        expect(result).to include(not_started)
+        expect(result).not_to include(started)
+      end
+
+      it "uses Time.current as default when no argument is given" do
+        allow(Time).to receive(:current).and_return(now)
+        not_started = Event.create!(start_at: future, end_at: nil)
+
+        expect(Event.before_in_time).to include(not_started)
+      end
+    end
+
+    describe "#before_in_time?" do
+      it "returns true when start_at > time" do
+        event = Event.create!(start_at: future, end_at: nil)
+
+        expect(event.before_in_time?(now)).to be true
+      end
+
+      it "returns false when start_at <= time" do
+        event = Event.create!(start_at: past, end_at: future)
+
+        expect(event.before_in_time?(now)).to be false
+      end
+
+      it "returns false when start_at is nil (no start means already started)" do
+        event = Event.create!(start_at: nil, end_at: future)
+
+        expect(event.before_in_time?(now)).to be false
+      end
+
+      it "returns false when start_at equals time (boundary)" do
+        event = Event.create!(start_at: now, end_at: future)
+
+        expect(event.before_in_time?(now)).to be false
+      end
+    end
+  end
+
+  describe "Inverse Scopes: after_in_time (already ended)" do
+    describe ".after_in_time" do
+      it "returns records where end_at <= time (nullable column)" do
+        ended = Event.create!(start_at: past, end_at: past)
+        active = Event.create!(start_at: past, end_at: future)
+        no_end = Event.create!(start_at: past, end_at: nil)
+
+        result = Event.after_in_time(now)
+
+        expect(result).to include(ended)
+        expect(result).not_to include(active, no_end)
+      end
+
+      it "returns records where end_at <= time (non-nullable column)" do
+        ended = Campaign.create!(start_at: Time.local(2024, 5, 1), end_at: past)
+        active = Campaign.create!(start_at: past, end_at: future)
+
+        result = Campaign.after_in_time(now)
+
+        expect(result).to include(ended)
+        expect(result).not_to include(active)
+      end
+
+      it "includes records where end_at equals time (boundary)" do
+        ended_exactly = Event.create!(start_at: past, end_at: now)
+
+        expect(Event.after_in_time(now)).to include(ended_exactly)
+      end
+
+      it "uses Time.current as default when no argument is given" do
+        allow(Time).to receive(:current).and_return(now)
+        ended = Event.create!(start_at: past, end_at: past)
+
+        expect(Event.after_in_time).to include(ended)
+      end
+    end
+
+    describe "#after_in_time?" do
+      it "returns true when end_at <= time" do
+        event = Event.create!(start_at: past, end_at: past)
+
+        expect(event.after_in_time?(now)).to be true
+      end
+
+      it "returns true when end_at equals time (boundary)" do
+        event = Event.create!(start_at: past, end_at: now)
+
+        expect(event.after_in_time?(now)).to be true
+      end
+
+      it "returns false when end_at > time" do
+        event = Event.create!(start_at: past, end_at: future)
+
+        expect(event.after_in_time?(now)).to be false
+      end
+
+      it "returns false when end_at is nil (no end means not ended)" do
+        event = Event.create!(start_at: past, end_at: nil)
+
+        expect(event.after_in_time?(now)).to be false
+      end
+    end
+  end
+
+  describe "Inverse Scopes: out_of_time (not in time window)" do
+    describe ".out_of_time" do
+      it "returns records that are either before_in_time or after_in_time" do
+        not_started = Event.create!(start_at: future, end_at: nil)
+        ended = Event.create!(start_at: past, end_at: past)
+        active = Event.create!(start_at: past, end_at: future)
+        no_bounds = Event.create!(start_at: nil, end_at: nil)
+
+        result = Event.out_of_time(now)
+
+        expect(result).to include(not_started, ended)
+        expect(result).not_to include(active, no_bounds)
+      end
+
+      it "works with non-nullable columns" do
+        not_started = Campaign.create!(start_at: future, end_at: Time.local(2024, 7, 1))
+        ended = Campaign.create!(start_at: Time.local(2024, 5, 1), end_at: past)
+        active = Campaign.create!(start_at: past, end_at: future)
+
+        result = Campaign.out_of_time(now)
+
+        expect(result).to include(not_started, ended)
+        expect(result).not_to include(active)
+      end
+
+      it "uses Time.current as default when no argument is given" do
+        allow(Time).to receive(:current).and_return(now)
+        not_started = Event.create!(start_at: future, end_at: nil)
+
+        expect(Event.out_of_time).to include(not_started)
+      end
+    end
+
+    describe "#out_of_time?" do
+      it "returns true when start_at > time (not started)" do
+        event = Event.create!(start_at: future, end_at: nil)
+
+        expect(event.out_of_time?(now)).to be true
+      end
+
+      it "returns true when end_at <= time (ended)" do
+        event = Event.create!(start_at: past, end_at: past)
+
+        expect(event.out_of_time?(now)).to be true
+      end
+
+      it "returns false when in time window" do
+        event = Event.create!(start_at: past, end_at: future)
+
+        expect(event.out_of_time?(now)).to be false
+      end
+
+      it "returns false when both are nil (always active)" do
+        event = Event.create!(start_at: nil, end_at: nil)
+
+        expect(event.out_of_time?(now)).to be false
+      end
+
+      it "is the logical inverse of in_time?" do
+        events = [
+          Event.create!(start_at: past, end_at: future),    # active
+          Event.create!(start_at: future, end_at: nil),     # not started
+          Event.create!(start_at: past, end_at: past),      # ended
+          Event.create!(start_at: nil, end_at: nil),        # always active
+          Event.create!(start_at: nil, end_at: future),     # no start
+          Event.create!(start_at: past, end_at: nil)        # no end
+        ]
+
+        events.each do |event|
+          expect(event.out_of_time?(now)).to eq(!event.in_time?(now)),
+                                             "Expected out_of_time? to be inverse of in_time? for event with " \
+                                             "start_at=#{event.start_at.inspect}, end_at=#{event.end_at.inspect}"
+        end
+      end
+    end
+  end
+
+  describe "Named inverse scopes (Article)" do
+    describe "before/after/out scopes with named scope" do
+      it "creates before_in_time_published scope" do
+        not_started = Article.create!(
+          start_at: past, end_at: future,
+          published_start_at: future, published_end_at: Time.local(2024, 7, 1)
+        )
+
+        expect(Article.before_in_time_published(now)).to include(not_started)
+      end
+
+      it "creates after_in_time_published scope" do
+        ended = Article.create!(
+          start_at: past, end_at: future,
+          published_start_at: Time.local(2024, 5, 1), published_end_at: past
+        )
+
+        expect(Article.after_in_time_published(now)).to include(ended)
+      end
+
+      it "creates out_of_time_published scope" do
+        not_started = Article.create!(
+          start_at: past, end_at: future,
+          published_start_at: future, published_end_at: Time.local(2024, 7, 1)
+        )
+        ended = Article.create!(
+          start_at: past, end_at: future,
+          published_start_at: Time.local(2024, 5, 1), published_end_at: past
+        )
+
+        result = Article.out_of_time_published(now)
+        expect(result).to include(not_started, ended)
+      end
+
+      it "creates instance methods with named scope" do
+        article = Article.create!(
+          start_at: past, end_at: future,
+          published_start_at: future, published_end_at: Time.local(2024, 7, 1)
+        )
+
+        expect(article.before_in_time_published?(now)).to be true
+        expect(article.after_in_time_published?(now)).to be false
+        expect(article.out_of_time_published?(now)).to be true
+      end
+    end
+  end
+
+  describe "Inverse scopes with start-only pattern (History)" do
+    describe ".before_in_time" do
+      it "returns records where start_at > time" do
+        future_record = History.create!(start_at: future)
+        past_record = History.create!(start_at: past)
+
+        result = History.before_in_time(now)
+
+        expect(result).to include(future_record)
+        expect(result).not_to include(past_record)
+      end
+    end
+
+    describe "#before_in_time?" do
+      it "returns true when start_at > time" do
+        history = History.create!(start_at: future)
+
+        expect(history.before_in_time?(now)).to be true
+      end
+    end
+
+    describe ".after_in_time and .out_of_time" do
+      it "after_in_time returns empty (no end column means never ended)" do
+        History.create!(start_at: past)
+        History.create!(start_at: Time.local(2024, 5, 1))
+
+        expect(History.after_in_time(now)).to be_empty
+      end
+
+      it "out_of_time is same as before_in_time for start-only pattern" do
+        future_record = History.create!(start_at: future)
+        past_record = History.create!(start_at: past)
+
+        expect(History.out_of_time(now)).to include(future_record)
+        expect(History.out_of_time(now)).not_to include(past_record)
+      end
+    end
+  end
+
+  describe "Inverse scopes with end-only pattern (Coupon)" do
+    describe ".after_in_time" do
+      it "returns records where expired_at <= time" do
+        expired = Coupon.create!(expired_at: past)
+        active = Coupon.create!(expired_at: future)
+
+        result = Coupon.after_in_time(now)
+
+        expect(result).to include(expired)
+        expect(result).not_to include(active)
+      end
+    end
+
+    describe "#after_in_time?" do
+      it "returns true when expired_at <= time" do
+        coupon = Coupon.create!(expired_at: past)
+
+        expect(coupon.after_in_time?(now)).to be true
+      end
+    end
+
+    describe ".before_in_time and .out_of_time" do
+      it "before_in_time returns empty (no start column means already started)" do
+        Coupon.create!(expired_at: future)
+        Coupon.create!(expired_at: Time.local(2024, 7, 1))
+
+        expect(Coupon.before_in_time(now)).to be_empty
+      end
+
+      it "out_of_time is same as after_in_time for end-only pattern" do
+        expired = Coupon.create!(expired_at: past)
+        active = Coupon.create!(expired_at: future)
+
+        expect(Coupon.out_of_time(now)).to include(expired)
+        expect(Coupon.out_of_time(now)).not_to include(active)
+      end
+    end
+  end
 end

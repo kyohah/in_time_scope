@@ -5,12 +5,6 @@
 Are you writing this every time in Rails?
 
 ```ruby
-where("start_at <= ? AND (end_at IS NULL OR end_at > ?)", Time.current, Time.current)
-```
-
-## Before / After
-
-```ruby
 # Before
 Event.where("start_at <= ? AND (end_at IS NULL OR end_at > ?)", Time.current, Time.current)
 
@@ -122,6 +116,32 @@ class Coupon < ActiveRecord::Base
 end
 ```
 
+### Inverse Scopes
+
+Query records outside the time window:
+
+```ruby
+# Records not yet started (start_at > time)
+Event.before_in_time
+event.before_in_time?
+
+# Records already ended (end_at <= time)
+Event.after_in_time
+event.after_in_time?
+
+# Records outside time window (before OR after)
+Event.out_of_time
+event.out_of_time?  # Logical inverse of in_time?
+```
+
+Works with named scopes too:
+
+```ruby
+Article.before_in_time_published  # Not yet published
+Article.after_in_time_published   # Publication ended
+Article.out_of_time_published     # Not currently published
+```
+
 ## Options Reference
 
 | Option | Description | Example |
@@ -141,6 +161,7 @@ Inspired by [onk/shibaraku](https://github.com/onk/shibaraku). This gem extends 
 - Multiple named scopes per model
 - Start-only / End-only patterns
 - `latest_in_time` / `earliest_in_time` for efficient `has_one` associations
+- Inverse scopes: `before_in_time`, `after_in_time`, `out_of_time`
 
 ## Development
 

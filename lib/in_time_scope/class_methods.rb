@@ -132,6 +132,11 @@ module InTimeScope
         else
           define_start_only_scope(scope_method_name, start_at_column)
           define_instance_method(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
+          define_latest_one_scope(scope_method_name, start_at_column)
+          define_earliest_one_scope(scope_method_name, start_at_column)
+          define_before_scope(scope_method_name, start_at_column, start_at_null)
+          define_after_scope(scope_method_name, end_at_column, end_at_null)
+          define_out_of_time_scope(scope_method_name)
         end
       elsif start_at_column.nil?
         # End-only pattern (expiration) - requires non-nullable column
@@ -142,11 +147,19 @@ module InTimeScope
         else
           define_end_only_scope(scope_method_name, end_at_column)
           define_instance_method(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
+          define_latest_one_scope(scope_method_name, end_at_column)
+          define_earliest_one_scope(scope_method_name, end_at_column)
+          define_before_scope(scope_method_name, start_at_column, start_at_null)
+          define_after_scope(scope_method_name, end_at_column, end_at_null)
+          define_out_of_time_scope(scope_method_name)
         end
       else
         # Both start and end
         define_full_scope(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
         define_instance_method(scope_method_name, start_at_column, start_at_null, end_at_column, end_at_null)
+        define_before_scope(scope_method_name, start_at_column, start_at_null)
+        define_after_scope(scope_method_name, end_at_column, end_at_null)
+        define_out_of_time_scope(scope_method_name)
       end
     end
 
@@ -157,14 +170,21 @@ module InTimeScope
     # @return [void]
     # @api private
     def define_error_scope_and_method(scope_method_name, message)
-      err_message = message
+      method_names = [
+        scope_method_name,
+        inverse_method_name(:before, scope_method_name),
+        inverse_method_name(:after, scope_method_name),
+        inverse_method_name(:out_of, scope_method_name)
+      ]
 
-      scope scope_method_name, ->(_time = Time.current) {
-        raise InTimeScope::ConfigurationError, err_message
-      }
+      method_names.each do |method_name|
+        scope method_name, ->(_time = Time.current) {
+          raise InTimeScope::ConfigurationError, message
+        }
 
-      define_method("#{scope_method_name}?") do |_time = Time.current|
-        raise InTimeScope::ConfigurationError, err_message
+        define_method("#{method_name}?") do |_time = Time.current|
+          raise InTimeScope::ConfigurationError, message
+        end
       end
     end
 
@@ -175,18 +195,11 @@ module InTimeScope
     # @return [void]
     # @api private
     def define_start_only_scope(scope_method_name, column)
-      col = column
-
       # Simple scope - WHERE only, no ORDER BY
       # Users can add .order(start_at: :desc) externally if needed
       scope scope_method_name, ->(time = Time.current) {
-        where(col => ..time)
+        where(column => ..time)
       }
-
-      # Efficient scope for has_one + includes using NOT EXISTS subquery
-      # Usage: has_one :current_price, -> { latest_in_time(:user_id) }, class_name: 'Price'
-      define_latest_one_scope(scope_method_name, column)
-      define_earliest_one_scope(scope_method_name, column)
     end
 
     # Defines the latest_in_time scope using NOT EXISTS subquery
@@ -204,7 +217,6 @@ module InTimeScope
     # @api private
     def define_latest_one_scope(scope_method_name, column)
       latest_method_name = scope_method_name == :in_time ? :latest_in_time : :"latest_#{scope_method_name}"
-      col = column
 
       # NOT EXISTS approach: select records where no later record exists for the same foreign key
       scope latest_method_name, ->(foreign_key, time = Time.current) {
@@ -214,13 +226,13 @@ module InTimeScope
                                       .from(p2)
                                       .project(Arel.sql("1"))
                                       .where(p2[foreign_key].eq(arel_table[foreign_key]))
-                                      .where(p2[col].lteq(time))
-                                      .where(p2[col].gt(arel_table[col]))
+                                      .where(p2[column].lteq(time))
+                                      .where(p2[column].gt(arel_table[column]))
                                       .where(p2[:id].not_eq(arel_table[:id]))
 
         not_exists = Arel::Nodes::Not.new(Arel::Nodes::Exists.new(subquery.ast))
 
-        where(col => ..time).where(not_exists)
+        where(column => ..time).where(not_exists)
       }
     end
 
@@ -239,7 +251,6 @@ module InTimeScope
     # @api private
     def define_earliest_one_scope(scope_method_name, column)
       earliest_method_name = scope_method_name == :in_time ? :earliest_in_time : :"earliest_#{scope_method_name}"
-      col = column
 
       # NOT EXISTS approach: select records where no earlier record exists for the same foreign key
       scope earliest_method_name, ->(foreign_key, time = Time.current) {
@@ -249,13 +260,13 @@ module InTimeScope
                                       .from(p2)
                                       .project(Arel.sql("1"))
                                       .where(p2[foreign_key].eq(arel_table[foreign_key]))
-                                      .where(p2[col].lteq(time))
-                                      .where(p2[col].lt(arel_table[col]))
+                                      .where(p2[column].lteq(time))
+                                      .where(p2[column].lt(arel_table[column]))
                                       .where(p2[:id].not_eq(arel_table[:id]))
 
         not_exists = Arel::Nodes::Not.new(Arel::Nodes::Exists.new(subquery.ast))
 
-        where(col => ..time).where(not_exists)
+        where(column => ..time).where(not_exists)
       }
     end
 
@@ -266,15 +277,9 @@ module InTimeScope
     # @return [void]
     # @api private
     def define_end_only_scope(scope_method_name, column)
-      col = column
-
       scope scope_method_name, ->(time = Time.current) {
-        where.not(col => ..time)
+        where.not(column => ..time)
       }
-
-      # Efficient scope for has_one + includes using NOT EXISTS subquery
-      define_latest_one_scope(scope_method_name, column)
-      define_earliest_one_scope(scope_method_name, column)
     end
 
     # Defines a full scope with both start and end columns
@@ -287,20 +292,17 @@ module InTimeScope
     # @return [void]
     # @api private
     def define_full_scope(scope_method_name, start_column, start_null, end_column, end_null)
-      s_col = start_column
-      e_col = end_column
-
       scope scope_method_name, ->(time = Time.current) {
         start_scope = if start_null
-                        where(s_col => nil).or(where(s_col => ..time))
+                        where(start_column => nil).or(where(start_column => ..time))
                       else
-                        where(s_col => ..time)
+                        where(start_column => ..time)
                       end
 
         end_scope = if end_null
-                      where(e_col => nil).or(where.not(e_col => ..time))
+                      where(end_column => nil).or(where.not(end_column => ..time))
                     else
-                      where.not(e_col => ..time)
+                      where.not(end_column => ..time)
                     end
 
         start_scope.merge(end_scope)
@@ -339,6 +341,96 @@ module InTimeScope
                  end
 
         start_ok && end_ok
+      end
+    end
+
+    # Defines before_in_time scope (records not yet started: start_at > time)
+    #
+    # @param scope_method_name [Symbol] The base scope method name
+    # @param start_column [Symbol, nil] The start column name
+    # @param start_null [Boolean, nil] Whether start column allows NULL
+    # @return [void]
+    # @api private
+    def define_before_scope(scope_method_name, start_column, start_null)
+      before_method_name = inverse_method_name(:before, scope_method_name)
+
+      # No start column means always started (never before)
+      # start_at > time means not yet started
+      # NULL start_at is treated as "already started" (not before)
+      scope before_method_name, ->(time = Time.current) {
+        start_column.nil? ? none : where.not(start_column => ..time)
+      }
+
+      define_method("#{before_method_name}?") do |time = Time.current|
+        return false if start_column.nil?
+
+        val = send(start_column)
+        return false if val.nil? && start_null
+
+        val > time
+      end
+    end
+
+    # Defines after_in_time scope (records already ended: end_at <= time)
+    #
+    # @param scope_method_name [Symbol] The base scope method name
+    # @param end_column [Symbol, nil] The end column name
+    # @param end_null [Boolean, nil] Whether end column allows NULL
+    # @return [void]
+    # @api private
+    def define_after_scope(scope_method_name, end_column, end_null)
+      after_method_name = inverse_method_name(:after, scope_method_name)
+
+      # No end column means never ends (never after)
+      # end_at <= time means already ended
+      # NULL end_at is treated as "never ends" (not after)
+      scope after_method_name, ->(time = Time.current) {
+        end_column.nil? ? none : where(end_column => ..time)
+      }
+
+      define_method("#{after_method_name}?") do |time = Time.current|
+        return false if end_column.nil?
+
+        val = send(end_column)
+        return false if val.nil? && end_null
+
+        val <= time
+      end
+    end
+
+    # Defines out_of_time scope (records outside time window: before OR after)
+    #
+    # @param scope_method_name [Symbol] The base scope method name
+    # @return [void]
+    # @api private
+    def define_out_of_time_scope(scope_method_name)
+      out_method_name = inverse_method_name(:out_of, scope_method_name)
+      before_method_name = inverse_method_name(:before, scope_method_name)
+      after_method_name = inverse_method_name(:after, scope_method_name)
+
+      # out_of_time = before_in_time OR after_in_time
+      scope out_method_name, ->(time = Time.current) {
+        send(before_method_name, time).or(send(after_method_name, time))
+      }
+
+      define_method("#{out_method_name}?") do |time = Time.current|
+        send("#{before_method_name}?", time) || send("#{after_method_name}?", time)
+      end
+    end
+
+    # Generates the method name for inverse scopes
+    #
+    # @param prefix [Symbol] The prefix (:before, :after, :out_of)
+    # @param scope_method_name [Symbol] The base scope method name
+    # @return [Symbol] The generated method name
+    # @api private
+    def inverse_method_name(prefix, scope_method_name)
+      if scope_method_name == :in_time
+        # out_of -> out_of_time, before -> before_in_time, after -> after_in_time
+        prefix == :out_of ? :out_of_time : :"#{prefix}_in_time"
+      else
+        # in_time_published -> before_in_time_published, out_of_time_published
+        prefix == :out_of ? :"out_of_time_#{scope_method_name.to_s.sub("in_time_", "")}" : :"#{prefix}_#{scope_method_name}"
       end
     end
   end
