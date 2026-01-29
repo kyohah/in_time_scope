@@ -32,7 +32,16 @@ jobs:
         run: mdbook build docs
 
       - name: Build Japanese documentation
-        run: mdbook build docs --config docs/book.ja.toml --dest-dir book/ja
+        run: mdbook build docs --config docs/book.ja.toml
+
+      - name: Build Chinese documentation
+        run: mdbook build docs --config docs/book.zh.toml
+
+      - name: Build German documentation
+        run: mdbook build docs --config docs/book.de.toml
+
+      - name: Build French documentation
+        run: mdbook build docs --config docs/book.fr.toml
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

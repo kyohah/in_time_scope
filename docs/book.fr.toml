@@ -1,12 +1,12 @@
 [book]
 title = "InTimeScope"
 authors = ["kyohah"]
-language = "ja"
+language = "fr"
 multilingual = false
-src = "ja"
+src = "fr"
 
 [build]
-build-dir = "book/ja"
+build-dir = "book/fr"
 
 [output.html]
 default-theme = "light"
