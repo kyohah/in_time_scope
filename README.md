@@ -18,6 +18,8 @@ Event.in_time
 
 That's it. One line of DSL, zero raw SQL in your models.
 
+**This is a simple, thin gem that just provides scopes. No learning curve required.**
+
 ## Why This Gem?
 
 This gem exists to:
