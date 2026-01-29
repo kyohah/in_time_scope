@@ -16,22 +16,22 @@ end
 Event.in_time
 ```
 
-Das war's. Eine Zeile DSL, kein rohes SQL mehr in Ihren Models.
+Eine Zeile DSL, kein rohes SQL mehr in Ihren Models.
 
 ## Warum dieses Gem?
 
-Dieses Gem existiert um:
+Dieses Gem wurde entwickelt für:
 
-- **Zeitbereichslogik konsistent zu halten** in Ihrer gesamten Codebasis
-- **Copy-Paste SQL zu vermeiden** das fehleranfällig ist
-- **Zeit als erstklassiges Domänenkonzept** mit benannten Scopes wie `in_time_published` zu etablieren
-- **Nullbarkeit automatisch zu erkennen** aus Ihrem Schema für optimierte Abfragen
+- **Konsistente Zeitraum-Logik** in Ihrer gesamten Codebasis
+- **Vermeidung von Copy-Paste-SQL**, das fehleranfällig ist
+- **Zeit als erstklassiges Domänenkonzept** mit benannten Scopes wie `in_time_published`
+- **Automatische Nullable-Erkennung** aus Ihrem Schema für optimierte Abfragen
 
-## Empfohlen für
+## Empfohlene Anwendungsfälle
 
 - Neue Rails-Anwendungen mit Gültigkeitszeiträumen
 - Models mit `start_at` / `end_at` Spalten
-- Teams die konsistente Zeitlogik ohne verstreute `where`-Klauseln wollen
+- Teams, die konsistente Zeitlogik ohne verstreute `where`-Klauseln wünschen
 
 ## Installation
 
@@ -47,19 +47,19 @@ class Event < ActiveRecord::Base
 end
 
 # Klassen-Scope
-Event.in_time                          # Aktuell gültige Datensätze
-Event.in_time(Time.parse("2024-06-01")) # Zu bestimmtem Zeitpunkt gültige Datensätze
+Event.in_time                          # Aktuell aktive Datensätze
+Event.in_time(Time.parse("2024-06-01")) # Zu einem bestimmten Zeitpunkt aktive Datensätze
 
-# Instanz-Methode
-event.in_time?                          # Ist dieser Datensatz jetzt gültig?
-event.in_time?(some_time)               # War er zu diesem Zeitpunkt gültig?
+# Instanzmethode
+event.in_time?                          # Ist dieser Datensatz jetzt aktiv?
+event.in_time?(some_time)               # War er zu diesem Zeitpunkt aktiv?
 ```
 
 ## Funktionen
 
 ### Auto-optimiertes SQL
 
-Das Gem liest Ihr Schema und generiert das richtige SQL:
+Das Gem liest Ihr Schema und generiert das passende SQL:
 
 ```ruby
 # NULL-erlaubte Spalten → NULL-bewusste Abfrage
@@ -89,9 +89,9 @@ class Campaign < ActiveRecord::Base
 end
 ```
 
-### Nur-Start-Pattern (Versionshistorie)
+### Nur-Start-Muster (Versionshistorie)
 
-Für Datensätze die bis zum nächsten gültig sind:
+Für Datensätze, die bis zum nächsten Eintrag gültig sind:
 
 ```ruby
 class Price < ActiveRecord::Base
@@ -106,9 +106,9 @@ end
 User.includes(:current_price)  # Kein N+1, holt nur den neuesten pro Benutzer
 ```
 
-### Nur-Ende-Pattern (Ablauf)
+### Nur-Ende-Muster (Ablauf)
 
-Für Datensätze die bis zum Ablauf gültig sind:
+Für Datensätze, die bis zum Ablauf aktiv sind:
 
 ```ruby
 class Coupon < ActiveRecord::Base
@@ -131,7 +131,7 @@ event.after_in_time?
 
 # Datensätze außerhalb des Zeitfensters (vorher ODER nachher)
 Event.out_of_time
-event.out_of_time?  # Logisches Gegenteil von in_time?
+event.out_of_time?  # Logische Umkehrung von in_time?
 ```
 
 Funktioniert auch mit benannten Scopes:
@@ -149,16 +149,16 @@ Article.out_of_time_published     # Aktuell nicht veröffentlicht
 | `scope_name` (1. Arg) | `:in_time` | Benannter Scope wie `in_time_published` | `in_time_scope :published` |
 | `start_at: { column: }` | `:start_at` | Benutzerdefinierter Spaltenname, `nil` zum Deaktivieren | `start_at: { column: :available_at }` |
 | `end_at: { column: }` | `:end_at` | Benutzerdefinierter Spaltenname, `nil` zum Deaktivieren | `end_at: { column: nil }` |
-| `start_at: { null: }` | automatisch | NULL-Behandlung erzwingen | `start_at: { null: false }` |
-| `end_at: { null: }` | automatisch | NULL-Behandlung erzwingen | `end_at: { null: true }` |
+| `start_at: { null: }` | auto-erkannt | NULL-Behandlung erzwingen | `start_at: { null: false }` |
+| `end_at: { null: }` | auto-erkannt | NULL-Behandlung erzwingen | `end_at: { null: true }` |
 
 ## Danksagungen
 
-Inspiriert von [onk/shibaraku](https://github.com/onk/shibaraku). Dieses Gem erweitert das Konzept mit:
+Inspiriert von [onk/shibaraku](https://github.com/onk/shibaraku). Dieses Gem erweitert das Konzept um:
 
 - Schema-bewusste NULL-Behandlung für optimierte Abfragen
 - Mehrere benannte Scopes pro Model
-- Nur-Start / Nur-Ende Patterns
+- Nur-Start / Nur-Ende Muster
 - `latest_in_time` / `earliest_in_time` für effiziente `has_one` Assoziationen
 - Inverse Scopes: `before_in_time`, `after_in_time`, `out_of_time`
 
@@ -178,11 +178,11 @@ bundle exec rubocop
 npx rulesync generate
 ```
 
-Dieses Projekt verwendet [rulesync](https://github.com/dyoshikawa/rulesync) zur Verwaltung von KI-Assistenten-Regeln. Bearbeiten Sie `.rulesync/rules/*.md` und führen Sie `npx rulesync generate` aus um `CLAUDE.md` zu aktualisieren.
+Dieses Projekt verwendet [rulesync](https://github.com/dyoshikawa/rulesync) zur Verwaltung der KI-Assistenten-Regeln. Bearbeiten Sie `.rulesync/rules/*.md` und führen Sie `npx rulesync generate` aus, um `CLAUDE.md` zu aktualisieren.
 
 ## Mitwirken
 
-Bug-Reports und Pull-Requests sind willkommen auf [GitHub](https://github.com/kyohah/in_time_scope).
+Fehlermeldungen und Pull Requests sind willkommen auf [GitHub](https://github.com/kyohah/in_time_scope).
 
 ## Lizenz
 
