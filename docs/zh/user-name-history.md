@@ -1,14 +1,14 @@
-# User Name History Example
+# 用户名历史示例
 
-This example demonstrates how to manage user name history with `in_time_scope`, allowing you to query a user's name at any point in time.
+本示例展示如何使用 `in_time_scope` 管理用户名历史，使你能够查询任意时间点的用户名。
 
-See also: [spec/user_name_history_spec.rb](https://github.com/kyohah/in_time_scope/blob/main/spec/user_name_history_spec.rb)
+另请参阅：[spec/user_name_history_spec.rb](https://github.com/kyohah/in_time_scope/blob/main/spec/user_name_history_spec.rb)
 
-## Use Case
+## 用例
 
-- Users can change their display name
-- You need to keep a history of all name changes
-- You want to retrieve the name that was active at a specific time (e.g., for audit logs, historical reports)
+- 用户可以更改显示名称
+- 你需要保留所有名称变更的历史
+- 你想要检索在特定时间点有效的名称（例如：用于审计日志、历史报告）
 
 ## Schema
 
@@ -24,7 +24,7 @@ class CreateUserNameHistories < ActiveRecord::Migration[7.0]
     create_table :user_name_histories do |t|
       t.references :user, null: false, foreign_key: true
       t.string :name, null: false
-      t.datetime :start_at, null: false  # When this name became active
+      t.datetime :start_at, null: false  # 此名称何时生效
       t.timestamps
     end
 
@@ -33,59 +33,59 @@ class CreateUserNameHistories < ActiveRecord::Migration[7.0]
 end
 ```
 
-## Models
+## 模型
 
 ```ruby
 class UserNameHistory < ApplicationRecord
   belongs_to :user
   include InTimeScope
 
-  # Start-only pattern: each record is valid from start_at until the next record
+  # 仅开始模式：每条记录从 start_at 到下一条记录有效
   in_time_scope start_at: { null: false }, end_at: { column: nil }
 end
 
 class User < ApplicationRecord
   has_many :user_name_histories
 
-  # Get the current name (latest record that has started)
+  # 获取当前名称（已开始的最新记录）
   has_one :current_name_history,
           -> { latest_in_time(:user_id) },
           class_name: "UserNameHistory"
 
-  # Convenience method for current name
+  # 获取当前名称的便捷方法
   def current_name
     current_name_history&.name
   end
 
-  # Get name at a specific time
+  # 获取特定时间点的名称
   def name_at(time)
     user_name_histories.in_time(time).order(start_at: :desc).first&.name
   end
 end
 ```
 
-## Usage
+## 使用方法
 
-### Creating Name History
+### 创建名称历史
 
 ```ruby
 user = User.create!(email: "alice@example.com")
 
-# Initial name
+# 初始名称
 UserNameHistory.create!(
   user: user,
   name: "Alice",
   start_at: Time.parse("2024-01-01")
 )
 
-# Name change
+# 名称变更
 UserNameHistory.create!(
   user: user,
   name: "Alice Smith",
   start_at: Time.parse("2024-06-01")
 )
 
-# Another name change
+# 另一次名称变更
 UserNameHistory.create!(
   user: user,
   name: "Alice Johnson",
@@ -93,14 +93,14 @@ UserNameHistory.create!(
 )
 ```
 
-### Querying Names
+### 查询名称
 
 ```ruby
-# Current name (uses has_one with latest_in_time)
+# 当前名称（使用 has_one 和 latest_in_time）
 user.current_name
 # => "Alice Johnson"
 
-# Name at a specific time
+# 特定时间点的名称
 user.name_at(Time.parse("2024-03-15"))
 # => "Alice"
 
@@ -111,10 +111,10 @@ user.name_at(Time.parse("2024-10-15"))
 # => "Alice Johnson"
 ```
 
-### Efficient Eager Loading
+### 高效的预加载
 
 ```ruby
-# Load users with their current names (no N+1)
+# 加载用户及其当前名称（无 N+1）
 users = User.includes(:current_name_history).limit(100)
 
 users.each do |user|
@@ -122,23 +122,23 @@ users.each do |user|
 end
 ```
 
-### Querying Active Records
+### 查询有效记录
 
 ```ruby
-# All name records that are currently active
+# 所有当前有效的名称记录
 UserNameHistory.in_time
-# => Returns the latest name record for each user
+# => 返回每个用户的最新名称记录
 
-# Name records that were active at a specific time
+# 在特定时间点有效的名称记录
 UserNameHistory.in_time(Time.parse("2024-05-01"))
 
-# Name records not yet started (scheduled for future)
+# 尚未开始的名称记录（为未来安排）
 UserNameHistory.before_in_time
 ```
 
-## How `latest_in_time` Works
+## `latest_in_time` 的工作原理
 
-The `latest_in_time(:user_id)` scope generates an efficient `NOT EXISTS` subquery:
+`latest_in_time(:user_id)` 作用域生成一个高效的 `NOT EXISTS` 子查询：
 
 ```sql
 SELECT * FROM user_name_histories AS h
@@ -151,14 +151,14 @@ WHERE h.start_at <= '2024-10-01'
   )
 ```
 
-This returns only the most recent record per user that was active at the given time, making it perfect for `has_one` associations.
+这只返回在给定时间点有效的每个用户的最新记录，非常适合 `has_one` 关联。
 
-## Tips
+## 提示
 
-1. **Always use `latest_in_time` with `has_one`** - It ensures you get exactly one record per foreign key.
+1. **始终将 `latest_in_time` 与 `has_one` 一起使用** - 它确保每个外键只获取一条记录。
 
-2. **Add a composite index** on `[user_id, start_at]` for optimal query performance.
+2. **添加复合索引** 在 `[user_id, start_at]` 上以获得最佳查询性能。
 
-3. **Use `includes` for eager loading** - The `NOT EXISTS` pattern works efficiently with Rails eager loading.
+3. **使用 `includes` 进行预加载** - `NOT EXISTS` 模式与 Rails 预加载高效配合。
 
-4. **Consider adding a unique constraint** on `[user_id, start_at]` to prevent duplicate records at the same time.
+4. **考虑添加唯一约束** 在 `[user_id, start_at]` 上以防止同一时间的重复记录。

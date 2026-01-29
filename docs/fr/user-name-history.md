@@ -1,16 +1,16 @@
-# User Name History Example
+# Exemple d'historique des noms d'utilisateur
 
-This example demonstrates how to manage user name history with `in_time_scope`, allowing you to query a user's name at any point in time.
+Cet exemple montre comment gérer l'historique des noms d'utilisateur avec `in_time_scope`, vous permettant de requêter le nom d'un utilisateur à n'importe quel moment.
 
-See also: [spec/user_name_history_spec.rb](https://github.com/kyohah/in_time_scope/blob/main/spec/user_name_history_spec.rb)
+Voir aussi : [spec/user_name_history_spec.rb](https://github.com/kyohah/in_time_scope/blob/main/spec/user_name_history_spec.rb)
 
-## Use Case
+## Cas d'utilisation
 
-- Users can change their display name
-- You need to keep a history of all name changes
-- You want to retrieve the name that was active at a specific time (e.g., for audit logs, historical reports)
+- Les utilisateurs peuvent changer leur nom d'affichage
+- Vous devez conserver un historique de tous les changements de nom
+- Vous voulez récupérer le nom qui était actif à un moment spécifique (ex : pour les logs d'audit, rapports historiques)
 
-## Schema
+## Schéma
 
 ```ruby
 # Migration
@@ -24,7 +24,7 @@ class CreateUserNameHistories < ActiveRecord::Migration[7.0]
     create_table :user_name_histories do |t|
       t.references :user, null: false, foreign_key: true
       t.string :name, null: false
-      t.datetime :start_at, null: false  # When this name became active
+      t.datetime :start_at, null: false  # Quand ce nom est devenu actif
       t.timestamps
     end
 
@@ -33,59 +33,59 @@ class CreateUserNameHistories < ActiveRecord::Migration[7.0]
 end
 ```
 
-## Models
+## Modèles
 
 ```ruby
 class UserNameHistory < ApplicationRecord
   belongs_to :user
   include InTimeScope
 
-  # Start-only pattern: each record is valid from start_at until the next record
+  # Modèle début uniquement : chaque enregistrement est valide de start_at jusqu'au suivant
   in_time_scope start_at: { null: false }, end_at: { column: nil }
 end
 
 class User < ApplicationRecord
   has_many :user_name_histories
 
-  # Get the current name (latest record that has started)
+  # Obtenir le nom actuel (dernier enregistrement qui a commencé)
   has_one :current_name_history,
           -> { latest_in_time(:user_id) },
           class_name: "UserNameHistory"
 
-  # Convenience method for current name
+  # Méthode pratique pour le nom actuel
   def current_name
     current_name_history&.name
   end
 
-  # Get name at a specific time
+  # Obtenir le nom à un moment spécifique
   def name_at(time)
     user_name_histories.in_time(time).order(start_at: :desc).first&.name
   end
 end
 ```
 
-## Usage
+## Utilisation
 
-### Creating Name History
+### Créer l'historique des noms
 
 ```ruby
 user = User.create!(email: "alice@example.com")
 
-# Initial name
+# Nom initial
 UserNameHistory.create!(
   user: user,
   name: "Alice",
   start_at: Time.parse("2024-01-01")
 )
 
-# Name change
+# Changement de nom
 UserNameHistory.create!(
   user: user,
   name: "Alice Smith",
   start_at: Time.parse("2024-06-01")
 )
 
-# Another name change
+# Autre changement de nom
 UserNameHistory.create!(
   user: user,
   name: "Alice Johnson",
@@ -93,14 +93,14 @@ UserNameHistory.create!(
 )
 ```
 
-### Querying Names
+### Requêter les noms
 
 ```ruby
-# Current name (uses has_one with latest_in_time)
+# Nom actuel (utilise has_one avec latest_in_time)
 user.current_name
 # => "Alice Johnson"
 
-# Name at a specific time
+# Nom à un moment spécifique
 user.name_at(Time.parse("2024-03-15"))
 # => "Alice"
 
@@ -111,10 +111,10 @@ user.name_at(Time.parse("2024-10-15"))
 # => "Alice Johnson"
 ```
 
-### Efficient Eager Loading
+### Chargement anticipé efficace
 
 ```ruby
-# Load users with their current names (no N+1)
+# Charger les utilisateurs avec leurs noms actuels (pas de N+1)
 users = User.includes(:current_name_history).limit(100)
 
 users.each do |user|
@@ -122,23 +122,23 @@ users.each do |user|
 end
 ```
 
-### Querying Active Records
+### Requêter les enregistrements actifs
 
 ```ruby
-# All name records that are currently active
+# Tous les enregistrements de noms actuellement actifs
 UserNameHistory.in_time
-# => Returns the latest name record for each user
+# => Retourne le dernier enregistrement de nom pour chaque utilisateur
 
-# Name records that were active at a specific time
+# Enregistrements de noms qui étaient actifs à un moment spécifique
 UserNameHistory.in_time(Time.parse("2024-05-01"))
 
-# Name records not yet started (scheduled for future)
+# Enregistrements de noms pas encore commencés (planifiés pour le futur)
 UserNameHistory.before_in_time
 ```
 
-## How `latest_in_time` Works
+## Comment fonctionne `latest_in_time`
 
-The `latest_in_time(:user_id)` scope generates an efficient `NOT EXISTS` subquery:
+Le scope `latest_in_time(:user_id)` génère une sous-requête `NOT EXISTS` efficace :
 
 ```sql
 SELECT * FROM user_name_histories AS h
@@ -151,14 +151,14 @@ WHERE h.start_at <= '2024-10-01'
   )
 ```
 
-This returns only the most recent record per user that was active at the given time, making it perfect for `has_one` associations.
+Cela retourne uniquement l'enregistrement le plus récent par utilisateur qui était actif au moment donné, ce qui est parfait pour les associations `has_one`.
 
-## Tips
+## Conseils
 
-1. **Always use `latest_in_time` with `has_one`** - It ensures you get exactly one record per foreign key.
+1. **Utilisez toujours `latest_in_time` avec `has_one`** - Cela garantit que vous obtenez exactement un enregistrement par clé étrangère.
 
-2. **Add a composite index** on `[user_id, start_at]` for optimal query performance.
+2. **Ajoutez un index composite** sur `[user_id, start_at]` pour des performances de requête optimales.
 
-3. **Use `includes` for eager loading** - The `NOT EXISTS` pattern works efficiently with Rails eager loading.
+3. **Utilisez `includes` pour le chargement anticipé** - Le pattern `NOT EXISTS` fonctionne efficacement avec le chargement anticipé de Rails.
 
-4. **Consider adding a unique constraint** on `[user_id, start_at]` to prevent duplicate records at the same time.
+4. **Envisagez d'ajouter une contrainte d'unicité** sur `[user_id, start_at]` pour éviter les enregistrements en double au même moment.

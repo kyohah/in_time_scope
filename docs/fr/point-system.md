@@ -1,24 +1,24 @@
-# Point System with Expiration Example
+# Exemple de système de points avec expiration
 
-This example demonstrates how to implement a point system with expiration dates using `in_time_scope`. Points can be pre-granted to become active in the future, eliminating the need for cron jobs.
+Cet exemple montre comment implémenter un système de points avec dates d'expiration en utilisant `in_time_scope`. Les points peuvent être pré-accordés pour devenir actifs dans le futur, éliminant le besoin de jobs cron.
 
-See also: [spec/point_system_spec.rb](https://github.com/kyohah/in_time_scope/blob/main/spec/point_system_spec.rb)
+Voir aussi : [spec/point_system_spec.rb](https://github.com/kyohah/in_time_scope/blob/main/spec/point_system_spec.rb)
 
-## Use Case
+## Cas d'utilisation
 
-- Users earn points with validity periods (start date and expiration date)
-- Points can be pre-granted to activate in the future (e.g., monthly membership bonuses)
-- Calculate valid points at any given time without cron jobs
-- Query upcoming points, expired points, etc.
+- Les utilisateurs gagnent des points avec des périodes de validité (date de début et date d'expiration)
+- Les points peuvent être pré-accordés pour s'activer dans le futur (ex : bonus mensuels d'adhésion)
+- Calculer les points valides à tout moment sans jobs cron
+- Requêter les points à venir, expirés, etc.
 
-## No Cron Jobs Required
+## Aucun job Cron requis
 
-**This is the killer feature.** Traditional point systems are a nightmare of scheduled jobs:
+**C'est LA fonctionnalité phare.** Les systèmes de points traditionnels sont un cauchemar de jobs planifiés :
 
-### The Cron Hell You're Used To
+### L'enfer Cron auquel vous êtes habitué
 
 ```ruby
-# activate_points_job.rb - runs every minute
+# activate_points_job.rb - s'exécute chaque minute
 class ActivatePointsJob < ApplicationJob
   def perform
     Point.where(status: "pending")
@@ -27,7 +27,7 @@ class ActivatePointsJob < ApplicationJob
   end
 end
 
-# expire_points_job.rb - runs every minute
+# expire_points_job.rb - s'exécute chaque minute
 class ExpirePointsJob < ApplicationJob
   def perform
     Point.where(status: "active")
@@ -36,63 +36,63 @@ class ExpirePointsJob < ApplicationJob
   end
 end
 
-# And then you need:
+# Et ensuite vous avez besoin de :
 # - Sidekiq / Delayed Job / Good Job
-# - Redis (for Sidekiq)
-# - Cron or whenever gem
-# - Monitoring for job failures
-# - Retry logic for failed jobs
-# - Lock mechanisms to prevent duplicate runs
+# - Redis (pour Sidekiq)
+# - Cron ou whenever gem
+# - Monitoring des échecs de jobs
+# - Logique de retry pour les jobs échoués
+# - Mécanismes de verrouillage pour éviter les exécutions en double
 ```
 
-### The InTimeScope Way
+### La méthode InTimeScope
 
 ```ruby
-# That's it. No jobs. No status column. No infrastructure.
+# C'est tout. Pas de jobs. Pas de colonne status. Pas d'infrastructure.
 user.points.in_time.sum(:amount)
 ```
 
-**One line. Zero infrastructure. Always accurate.**
+**Une ligne. Zéro infrastructure. Toujours précis.**
 
-### Why This Works
+### Pourquoi ça fonctionne
 
-The `start_at` and `end_at` columns ARE the state. There's no need for a `status` column because the time comparison happens at query time:
+Les colonnes `start_at` et `end_at` SONT l'état. Pas besoin de colonne `status` car la comparaison temporelle se fait au moment de la requête :
 
 ```ruby
-# These all work without any background processing:
-user.points.in_time                    # Currently valid
-user.points.in_time(1.month.from_now)  # Valid next month
-user.points.in_time(1.year.ago)        # Were valid last year (auditing!)
-user.points.before_in_time             # Pending (not yet active)
-user.points.after_in_time              # Expired
+# Tout cela fonctionne sans traitement en arrière-plan :
+user.points.in_time                    # Actuellement valides
+user.points.in_time(1.month.from_now)  # Valides le mois prochain
+user.points.in_time(1.year.ago)        # Étaient valides l'année dernière (audit !)
+user.points.before_in_time             # En attente (pas encore actifs)
+user.points.after_in_time              # Expirés
 ```
 
-### What You Eliminate
+### Ce que vous éliminez
 
-| Component | Cron-Based System | InTimeScope |
+| Composant | Système basé sur Cron | InTimeScope |
 |-----------|------------------|-------------|
-| Background job library | Required | **Not needed** |
-| Redis/database for jobs | Required | **Not needed** |
-| Job scheduler (cron) | Required | **Not needed** |
-| Status column | Required | **Not needed** |
-| Migration to update status | Required | **Not needed** |
-| Monitoring for job failures | Required | **Not needed** |
-| Retry logic | Required | **Not needed** |
-| Race condition handling | Required | **Not needed** |
+| Bibliothèque de jobs en arrière-plan | Requis | **Non nécessaire** |
+| Redis/base de données pour les jobs | Requis | **Non nécessaire** |
+| Planificateur de jobs (cron) | Requis | **Non nécessaire** |
+| Colonne status | Requis | **Non nécessaire** |
+| Migration pour mettre à jour le status | Requis | **Non nécessaire** |
+| Monitoring des échecs de jobs | Requis | **Non nécessaire** |
+| Logique de retry | Requis | **Non nécessaire** |
+| Gestion des conditions de concurrence | Requis | **Non nécessaire** |
 
-### Bonus: Time Travel for Free
+### Bonus : voyage dans le temps gratuit
 
-With cron-based systems, answering "How many points did user X have on January 15th?" requires complex audit logging or event sourcing.
+Avec les systèmes basés sur cron, répondre à "Combien de points l'utilisateur X avait-il le 15 janvier ?" nécessite une journalisation d'audit complexe ou du event sourcing.
 
-With InTimeScope:
+Avec InTimeScope :
 
 ```ruby
 user.points.in_time(Date.parse("2024-01-15").middle_of_day).sum(:amount)
 ```
 
-**Historical queries just work.** No extra tables. No event sourcing. No complexity.
+**Les requêtes historiques fonctionnent directement.** Pas de tables supplémentaires. Pas d'event sourcing. Pas de complexité.
 
-## Schema
+## Schéma
 
 ```ruby
 # Migration
@@ -102,8 +102,8 @@ class CreatePoints < ActiveRecord::Migration[7.0]
       t.references :user, null: false, foreign_key: true
       t.integer :amount, null: false
       t.string :reason, null: false
-      t.datetime :start_at, null: false  # When points become usable
-      t.datetime :end_at, null: false    # When points expire
+      t.datetime :start_at, null: false  # Quand les points deviennent utilisables
+      t.datetime :end_at, null: false    # Quand les points expirent
       t.timestamps
     end
 
@@ -112,13 +112,13 @@ class CreatePoints < ActiveRecord::Migration[7.0]
 end
 ```
 
-## Models
+## Modèles
 
 ```ruby
 class Point < ApplicationRecord
   belongs_to :user
 
-  # Both start_at and end_at are required (full time window)
+  # start_at et end_at sont tous deux requis (fenêtre temporelle complète)
   in_time_scope start_at: { null: false }, end_at: { null: false }
 end
 
@@ -126,51 +126,51 @@ class User < ApplicationRecord
   has_many :points
   has_many :in_time_points, -> { in_time }, class_name: "Point"
 
-  # Grant monthly bonus points (pre-scheduled)
+  # Accorder des points bonus mensuels (pré-planifiés)
   def grant_monthly_bonus(amount:, months_valid: 6)
     points.create!(
       amount: amount,
       reason: "Monthly membership bonus",
-      start_at: 1.month.from_now,  # Activates next month
+      start_at: 1.month.from_now,  # S'active le mois prochain
       end_at: (1 + months_valid).months.from_now
     )
   end
 end
 ```
 
-### The Power of `has_many :in_time_points`
+### La puissance de `has_many :in_time_points`
 
-This simple line unlocks **N+1 free eager loading** for valid points:
+Cette simple ligne débloque le **chargement anticipé sans N+1** pour les points valides :
 
 ```ruby
-# Load 100 users with their valid points in just 2 queries
+# Charger 100 utilisateurs avec leurs points valides en seulement 2 requêtes
 users = User.includes(:in_time_points).limit(100)
 
 users.each do |user|
-  # No additional queries! Already loaded.
+  # Pas de requêtes supplémentaires ! Déjà chargé.
   total = user.in_time_points.sum(&:amount)
   puts "#{user.name}: #{total} points"
 end
 ```
 
-Without this association, you'd need:
+Sans cette association, vous auriez besoin de :
 
 ```ruby
-# N+1 problem: 1 query for users + 100 queries for points
+# Problème N+1 : 1 requête pour les utilisateurs + 100 requêtes pour les points
 users = User.limit(100)
 users.each do |user|
-  total = user.points.in_time.sum(:amount)  # Query per user!
+  total = user.points.in_time.sum(:amount)  # Requête par utilisateur !
 end
 ```
 
-## Usage
+## Utilisation
 
-### Granting Points with Different Validity Periods
+### Accorder des points avec différentes périodes de validité
 
 ```ruby
 user = User.find(1)
 
-# Immediate points (valid for 1 year)
+# Points immédiats (valides 1 an)
 user.points.create!(
   amount: 100,
   reason: "Welcome bonus",
@@ -178,11 +178,11 @@ user.points.create!(
   end_at: 1.year.from_now
 )
 
-# Pre-scheduled points for 6-month members
-# Points activate next month, valid for 6 months after activation
+# Points pré-planifiés pour les membres 6 mois
+# Les points s'activent le mois prochain, valides 6 mois après activation
 user.grant_monthly_bonus(amount: 500, months_valid: 6)
 
-# Campaign points (limited time)
+# Points de campagne (durée limitée)
 user.points.create!(
   amount: 200,
   reason: "Summer campaign",
@@ -191,105 +191,105 @@ user.points.create!(
 )
 ```
 
-### Querying Points
+### Requêter les points
 
 ```ruby
-# Current valid points
+# Points valides actuellement
 user.in_time_member_points.sum(:amount)
-# => 100 (only the welcome bonus is currently active)
+# => 100 (seul le bonus de bienvenue est actuellement actif)
 
-# Check how many points will be available next month
+# Vérifier combien de points seront disponibles le mois prochain
 user.in_time_member_points(1.month.from_now).sum(:amount)
-# => 600 (welcome bonus + monthly bonus)
+# => 600 (bonus de bienvenue + bonus mensuel)
 
-# Pending points (scheduled but not yet active)
+# Points en attente (planifiés mais pas encore actifs)
 user.points.before_in_time.sum(:amount)
-# => 500 (monthly bonus waiting to activate)
+# => 500 (bonus mensuel en attente d'activation)
 
-# Expired points
+# Points expirés
 user.points.after_in_time.sum(:amount)
 
-# All invalid points (pending + expired)
+# Tous les points invalides (en attente + expirés)
 user.points.out_of_time.sum(:amount)
 ```
 
-### Admin Dashboard Queries
+### Requêtes pour tableau de bord admin
 
 ```ruby
-# Historical audit: points valid on a specific date
+# Audit historique : points valides à une date spécifique
 Point.in_time(Date.parse("2024-01-15").middle_of_day)
      .group(:user_id)
      .sum(:amount)
 ```
 
-## Automatic Membership Bonus Flow
+## Flux de bonus d'adhésion automatique
 
-For 6-month premium members, you can set up recurring bonuses **without cron, without Sidekiq, without Redis, without monitoring**:
+Pour les membres premium 6 mois, vous pouvez configurer des bonus récurrents **sans cron, sans Sidekiq, sans Redis, sans monitoring** :
 
 ```ruby
-# When user signs up for premium, create membership and all bonuses atomically
+# Quand l'utilisateur s'inscrit en premium, créer l'adhésion et tous les bonus de façon atomique
 ActiveRecord::Base.transaction do
   membership = Membership.create!(user: user, plan: "premium_6_months")
 
-  # Pre-create all 6 monthly bonuses at signup
+  # Pré-créer les 6 bonus mensuels à l'inscription
   6.times do |month|
     user.points.create!(
       amount: 500,
       reason: "Premium member bonus - Month #{month + 1}",
       start_at: (month + 1).months.from_now,
-      end_at: (month + 7).months.from_now  # Each bonus valid for 6 months
+      end_at: (month + 7).months.from_now  # Chaque bonus valide 6 mois
     )
   end
 end
-# => Creates membership + 6 point records that will activate monthly
+# => Crée l'adhésion + 6 enregistrements de points qui s'activeront mensuellement
 ```
 
-## Why This Design is Superior
+## Pourquoi cette conception est supérieure
 
-### Correctness
+### Exactitude
 
-- **No race conditions**: Cron jobs can run twice, skip runs, or overlap. InTimeScope queries are always deterministic.
-- **No timing drift**: Cron runs at intervals (every minute? every 5 minutes?). InTimeScope is accurate to the millisecond.
-- **No lost updates**: Job failures can leave points in wrong states. InTimeScope has no state to corrupt.
+- **Pas de conditions de concurrence** : Les jobs cron peuvent s'exécuter deux fois, sauter des exécutions ou se chevaucher. Les requêtes InTimeScope sont toujours déterministes.
+- **Pas de dérive temporelle** : Cron s'exécute à intervalles (chaque minute ? toutes les 5 minutes ?). InTimeScope est précis à la milliseconde.
+- **Pas de mises à jour perdues** : Les échecs de jobs peuvent laisser les points dans des états incorrects. InTimeScope n'a pas d'état à corrompre.
 
-### Simplicity
+### Simplicité
 
-- **No infrastructure**: Delete your Sidekiq. Delete your Redis. Delete your job monitoring.
-- **No migrations for status changes**: The time IS the status. No `UPDATE` statements needed.
-- **No debugging job logs**: Just query the database to see exactly what's happening.
+- **Pas d'infrastructure** : Supprimez Sidekiq. Supprimez Redis. Supprimez le monitoring des jobs.
+- **Pas de migrations pour les changements de status** : Le temps EST le status. Pas besoin d'instructions `UPDATE`.
+- **Pas de débogage des logs de jobs** : Interrogez simplement la base de données pour voir exactement ce qui se passe.
 
-### Testability
+### Testabilité
 
 ```ruby
-# Cron-based testing is painful:
+# Les tests basés sur cron sont pénibles :
 travel_to 1.month.from_now do
   ActivatePointsJob.perform_now
   ExpirePointsJob.perform_now
   expect(user.points.active.sum(:amount)).to eq(500)
 end
 
-# InTimeScope testing is trivial:
+# Les tests InTimeScope sont triviaux :
 expect(user.points.in_time(1.month.from_now).sum(:amount)).to eq(500)
 ```
 
-### Summary
+### Résumé
 
-| Aspect | Cron-Based | InTimeScope |
+| Aspect | Basé sur Cron | InTimeScope |
 |--------|-----------|-------------|
-| Infrastructure | Sidekiq + Redis + Cron | **None** |
-| Point activation | Batch job (delayed) | **Instant** |
-| Historical queries | Impossible without audit log | **Built-in** |
-| Timing accuracy | Minutes (cron interval) | **Milliseconds** |
-| Debugging | Job logs + database | **Database only** |
-| Testing | Time travel + run jobs | **Just query** |
-| Failure modes | Many (job failures, race conditions) | **None** |
+| Infrastructure | Sidekiq + Redis + Cron | **Aucune** |
+| Activation des points | Job batch (différé) | **Instantané** |
+| Requêtes historiques | Impossible sans log d'audit | **Intégré** |
+| Précision temporelle | Minutes (intervalle cron) | **Millisecondes** |
+| Débogage | Logs de jobs + base de données | **Base de données uniquement** |
+| Tests | Voyage dans le temps + exécuter les jobs | **Juste une requête** |
+| Modes d'échec | Nombreux (échecs de jobs, conditions de concurrence) | **Aucun** |
 
-## Tips
+## Conseils
 
-1. **Use database indexes** on `[user_id, start_at, end_at]` for optimal performance.
+1. **Utilisez des index de base de données** sur `[user_id, start_at, end_at]` pour des performances optimales.
 
-2. **Pre-grant points at signup** instead of scheduling cron jobs.
+2. **Pré-accordez les points à l'inscription** au lieu de planifier des jobs cron.
 
-3. **Use `in_time(time)` for audits** to check point balances at any historical time.
+3. **Utilisez `in_time(time)` pour les audits** pour vérifier les soldes de points à n'importe quel moment historique.
 
-4. **Combine with inverse scopes** to build admin dashboards showing pending/expired points.
+4. **Combinez avec les scopes inversés** pour construire des tableaux de bord admin affichant les points en attente/expirés.
