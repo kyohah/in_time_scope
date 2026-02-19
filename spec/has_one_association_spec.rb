@@ -4,19 +4,16 @@ require "spec_helper"
 
 RSpec.describe "has_one association with in_time scope" do
   let(:now) { Time.local(2024, 6, 15, 12, 0, 0) }
-  let(:past) { Time.local(2024, 6, 14, 12, 0, 0) }
-  let(:older_past) { Time.local(2024, 6, 13, 12, 0, 0) }
-  let(:future) { Time.local(2024, 6, 16, 12, 0, 0) }
 
-  before { allow(Time).to receive(:current).and_return(now) }
+  before { Timecop.freeze(now) }
 
   describe "User#current_price with start-only pattern" do
     context "when user has multiple prices" do
       it "returns the most recent price where start_at <= now" do
         user = User.create!(name: "Alice")
-        _old_price = Price.create!(user: user, amount: 100, start_at: older_past)
-        current_price = Price.create!(user: user, amount: 200, start_at: past)
-        _future_price = Price.create!(user: user, amount: 300, start_at: future)
+        _old_price = Price.create!(user: user, amount: 100, start_at: 2.days.ago)
+        current_price = Price.create!(user: user, amount: 200, start_at: 1.day.ago)
+        _future_price = Price.create!(user: user, amount: 300, start_at: 1.day.from_now)
 
         # Direct association access
         result = user.current_price
@@ -29,7 +26,7 @@ RSpec.describe "has_one association with in_time scope" do
     context "when user has only future prices" do
       it "returns nil" do
         user = User.create!(name: "Bob")
-        Price.create!(user: user, amount: 100, start_at: future)
+        Price.create!(user: user, amount: 100, start_at: 1.day.from_now)
 
         expect(user.current_price).to be_nil
       end
@@ -52,14 +49,14 @@ RSpec.describe "has_one association with in_time scope" do
         user3 = User.create!(name: "Charlie")
 
         # User1: has current and old prices
-        Price.create!(user: user1, amount: 100, start_at: older_past)
-        price1_current = Price.create!(user: user1, amount: 200, start_at: past)
+        Price.create!(user: user1, amount: 100, start_at: 2.days.ago)
+        price1_current = Price.create!(user: user1, amount: 200, start_at: 1.day.ago)
 
         # User2: has only future price (no current)
-        Price.create!(user: user2, amount: 300, start_at: future)
+        Price.create!(user: user2, amount: 300, start_at: 1.day.from_now)
 
         # User3: has current price
-        price3_current = Price.create!(user: user3, amount: 400, start_at: past)
+        price3_current = Price.create!(user: user3, amount: 400, start_at: 1.day.ago)
 
         # Preload with includes
         users = User.includes(:current_price).order(:id).to_a
@@ -72,7 +69,7 @@ RSpec.describe "has_one association with in_time scope" do
       it "does not cause N+1 queries when using includes" do
         3.times do |i|
           user = User.create!(name: "User#{i}")
-          Price.create!(user: user, amount: 100 * i, start_at: past)
+          Price.create!(user: user, amount: 100 * i, start_at: 1.day.ago)
         end
 
         # This should execute a limited number of queries, not N+1
@@ -93,8 +90,8 @@ RSpec.describe "has_one association with in_time scope" do
       user = User.create!(name: "Alice")
 
       # id: 1 is older, id: 2 is more recent
-      Price.create!(user: user, amount: 100, start_at: older_past) # id: 1
-      newer_price = Price.create!(user: user, amount: 150, start_at: past) # id: 2
+      Price.create!(user: user, amount: 100, start_at: 2.days.ago) # id: 1
+      newer_price = Price.create!(user: user, amount: 150, start_at: 1.day.ago) # id: 2
 
       # Direct access
       expect(user.current_price).to eq(newer_price)
@@ -110,8 +107,8 @@ RSpec.describe "has_one association with in_time scope" do
       user = User.create!(name: "Bob")
 
       # id: 1 is more recent, id: 2 is older
-      newer_price = Price.create!(user: user, amount: 100, start_at: past) # id: 1
-      Price.create!(user: user, amount: 150, start_at: older_past) # id: 2
+      newer_price = Price.create!(user: user, amount: 100, start_at: 1.day.ago) # id: 1
+      Price.create!(user: user, amount: 150, start_at: 2.days.ago) # id: 2
 
       # Direct access
       expect(user.current_price).to eq(newer_price)
@@ -128,12 +125,12 @@ RSpec.describe "has_one association with in_time scope" do
       user2 = User.create!(name: "Bob")
 
       # User1: id:1 older, id:2 newer -> should select id:2
-      Price.create!(user: user1, amount: 100, start_at: older_past)
-      user1_expected = Price.create!(user: user1, amount: 150, start_at: past)
+      Price.create!(user: user1, amount: 100, start_at: 2.days.ago)
+      user1_expected = Price.create!(user: user1, amount: 150, start_at: 1.day.ago)
 
       # User2: id:3 newer, id:4 older -> should select id:3
-      user2_expected = Price.create!(user: user2, amount: 200, start_at: past)
-      Price.create!(user: user2, amount: 250, start_at: older_past)
+      user2_expected = Price.create!(user: user2, amount: 200, start_at: 1.day.ago)
+      Price.create!(user: user2, amount: 250, start_at: 2.days.ago)
 
       users = User.includes(:current_price).order(:id).to_a
 
@@ -148,7 +145,7 @@ RSpec.describe "has_one association with in_time scope" do
   describe "eager_load with has_one in_time scope" do
     it "works with eager_load (LEFT OUTER JOIN)" do
       user = User.create!(name: "Alice")
-      current_price = Price.create!(user: user, amount: 200, start_at: past)
+      current_price = Price.create!(user: user, amount: 200, start_at: 1.day.ago)
 
       users = User.eager_load(:current_price).where(id: user.id).to_a
 
