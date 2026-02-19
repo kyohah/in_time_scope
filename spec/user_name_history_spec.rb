@@ -13,11 +13,6 @@ RSpec.describe "User Name History Example" do
 
   let(:user) { User.create!(name: "test_user") }
 
-  before do
-    UserNameHistory.delete_all
-    User.delete_all
-  end
-
   describe "UserNameHistory with start-only pattern" do
     it "creates in_time scope for start-only pattern" do
       history1 = UserNameHistory.create!(user: user, name: "Alice", start_at: january)
