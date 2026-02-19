@@ -3,11 +3,12 @@
 require "spec_helper"
 
 RSpec.describe "has_one association with in_time scope" do
-  # Use Time.current-based times to work with the default scope behavior
-  let(:now) { Time.current }
-  let(:past) { now - 1.day }
-  let(:older_past) { now - 2.days }
-  let(:future) { now + 1.day }
+  let(:now) { Time.local(2024, 6, 15, 12, 0, 0) }
+  let(:past) { Time.local(2024, 6, 14, 12, 0, 0) }
+  let(:older_past) { Time.local(2024, 6, 13, 12, 0, 0) }
+  let(:future) { Time.local(2024, 6, 16, 12, 0, 0) }
+
+  before { allow(Time).to receive(:current).and_return(now) }
 
   describe "User#current_price with start-only pattern" do
     context "when user has multiple prices" do
@@ -92,8 +93,8 @@ RSpec.describe "has_one association with in_time scope" do
       user = User.create!(name: "Alice")
 
       # id: 1 is older, id: 2 is more recent
-      Price.create!(user: user, amount: 100, start_at: 2.days.ago) # id: 1
-      newer_price = Price.create!(user: user, amount: 150, start_at: 1.day.ago) # id: 2
+      Price.create!(user: user, amount: 100, start_at: older_past) # id: 1
+      newer_price = Price.create!(user: user, amount: 150, start_at: past) # id: 2
 
       # Direct access
       expect(user.current_price).to eq(newer_price)
@@ -109,8 +110,8 @@ RSpec.describe "has_one association with in_time scope" do
       user = User.create!(name: "Bob")
 
       # id: 1 is more recent, id: 2 is older
-      newer_price = Price.create!(user: user, amount: 100, start_at: 1.day.ago) # id: 1
-      Price.create!(user: user, amount: 150, start_at: 2.days.ago) # id: 2
+      newer_price = Price.create!(user: user, amount: 100, start_at: past) # id: 1
+      Price.create!(user: user, amount: 150, start_at: older_past) # id: 2
 
       # Direct access
       expect(user.current_price).to eq(newer_price)
@@ -127,12 +128,12 @@ RSpec.describe "has_one association with in_time scope" do
       user2 = User.create!(name: "Bob")
 
       # User1: id:1 older, id:2 newer -> should select id:2
-      Price.create!(user: user1, amount: 100, start_at: 2.days.ago)
-      user1_expected = Price.create!(user: user1, amount: 150, start_at: 1.day.ago)
+      Price.create!(user: user1, amount: 100, start_at: older_past)
+      user1_expected = Price.create!(user: user1, amount: 150, start_at: past)
 
       # User2: id:3 newer, id:4 older -> should select id:3
-      user2_expected = Price.create!(user: user2, amount: 200, start_at: 1.day.ago)
-      Price.create!(user: user2, amount: 250, start_at: 2.days.ago)
+      user2_expected = Price.create!(user: user2, amount: 200, start_at: past)
+      Price.create!(user: user2, amount: 250, start_at: older_past)
 
       users = User.includes(:current_price).order(:id).to_a
 

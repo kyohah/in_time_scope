@@ -3,10 +3,12 @@
 require "spec_helper"
 
 RSpec.describe "latest_in_time scope (NOT EXISTS)" do
-  let(:now) { Time.current }
-  let(:past) { now - 1.day }
-  let(:older_past) { now - 2.days }
-  let(:future) { now + 1.day }
+  let(:now) { Time.local(2024, 6, 15, 12, 0, 0) }
+  let(:past) { Time.local(2024, 6, 14, 12, 0, 0) }
+  let(:older_past) { Time.local(2024, 6, 13, 12, 0, 0) }
+  let(:future) { Time.local(2024, 6, 16, 12, 0, 0) }
+
+  before { allow(Time).to receive(:current).and_return(now) }
 
   describe "Price.latest_in_time(:user_id)" do
     it "returns only the latest price per user using NOT EXISTS" do
