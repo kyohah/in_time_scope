@@ -145,15 +145,4 @@ RSpec.describe "latest_in_time scope (NOT EXISTS)" do
       expect(sql).to include("WHERE")
     end
   end
-
-  private
-
-  def count_queries(&block)
-    count = 0
-    counter = ->(_name, _start, _finish, _id, payload) {
-      count += 1 unless payload[:name] == "SCHEMA"
-    }
-    ActiveSupport::Notifications.subscribed(counter, "sql.active_record", &block)
-    count
-  end
 end
