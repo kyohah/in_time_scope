@@ -154,15 +154,4 @@ RSpec.describe "has_one association with in_time scope" do
       expect(users.first.current_price).to eq(current_price)
     end
   end
-
-  private
-
-  def count_queries(&block)
-    count = 0
-    counter = ->(_name, _start, _finish, _id, payload) {
-      count += 1 unless payload[:name] == "SCHEMA"
-    }
-    ActiveSupport::Notifications.subscribed(counter, "sql.active_record", &block)
-    count
-  end
 end
