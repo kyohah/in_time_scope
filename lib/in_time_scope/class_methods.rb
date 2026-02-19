@@ -191,6 +191,12 @@ module InTimeScope
     # This scope efficiently finds the latest record per foreign key,
     # suitable for use with has_one associations and includes.
     #
+    # @note When multiple records share the same timestamp for a given foreign key,
+    #   all of them will be returned. This is safe for +has_one+ associations
+    #   (ActiveRecord picks one), but callers using this as a standalone scope
+    #   should be aware that the result may contain multiple records per foreign key
+    #   in the case of timestamp ties.
+    #
     # @param suffix [String] The suffix for method names
     # @param column [Symbol] The timestamp column name
     # @return [void]
@@ -222,6 +228,12 @@ module InTimeScope
     #
     # This scope efficiently finds the earliest record per foreign key,
     # suitable for use with has_one associations and includes.
+    #
+    # @note When multiple records share the same timestamp for a given foreign key,
+    #   all of them will be returned. This is safe for +has_one+ associations
+    #   (ActiveRecord picks one), but callers using this as a standalone scope
+    #   should be aware that the result may contain multiple records per foreign key
+    #   in the case of timestamp ties.
     #
     # @param suffix [String] The suffix for method names
     # @param column [Symbol] The timestamp column name
