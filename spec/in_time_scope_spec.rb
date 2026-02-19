@@ -362,10 +362,8 @@ RSpec.describe InTimeScope do
     end
   end
 
-  describe "prefix option" do
-    it "creates scope with prefix style name when prefix: true" do
-      # Article uses in_time_scope :published without prefix
-      # so it creates in_time_published method
+  describe "Named scope method existence" do
+    it "creates scope and instance method with scope name suffix" do
       expect(Article).to respond_to(:in_time_published)
       expect(Article.new).to respond_to(:in_time_published?)
     end
