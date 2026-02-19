@@ -2,6 +2,7 @@
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "in_time_scope"
+require "timecop"
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|
@@ -19,6 +20,10 @@ RSpec.configure do |config|
       # テストデータを初期化するためにロールバックする
       raise ActiveRecord::Rollback
     end
+  end
+
+  config.after do
+    Timecop.return
   end
 end
 

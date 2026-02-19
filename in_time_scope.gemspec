@@ -42,5 +42,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rubocop", "~> 1.21"
   spec.add_development_dependency "sqlite3"
   spec.add_development_dependency "steep"
+  spec.add_development_dependency "timecop"
   spec.add_development_dependency "yard"
 end
