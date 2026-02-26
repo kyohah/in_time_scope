@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write  # for RubyGems trusted publisher (OIDC)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: rubygems
+      url: https://rubygems.org/gems/in_time_scope
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Build gem
+        run: bundle exec rake build
+
+      - name: Publish to RubyGems
+        uses: rubygems/release-gem@v1
