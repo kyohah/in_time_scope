@@ -12,8 +12,7 @@ require "spec_helper"
 RSpec.describe "scope filter propagation in latest_in_time / earliest_in_time" do
   let(:now) { Time.local(2024, 6, 15, 12, 0, 0) }
 
-  before { travel_to(now) }
-  after  { travel_back }
+  before { Timecop.freeze(now) }
 
   let!(:user) { User.create!(name: "Alice") }
 

@@ -2,11 +2,9 @@
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "in_time_scope"
-require "active_support/testing/time_helpers"
+require "timecop"
 
 RSpec.configure do |config|
-  config.include ActiveSupport::Testing::TimeHelpers
-
   config.expect_with :rspec do |expectations|
     expectations.include_chain_clauses_in_custom_matcher_descriptions = true
   end
@@ -23,6 +21,10 @@ RSpec.configure do |config|
       raise ActiveRecord::Rollback
     end
   end
+
+  config.after do
+    Timecop.return
+  end
 end
 
-Dir["#{File.dirname(__FILE__)}/support/**/*.rb"].each { |f| require f }
+Dir[File.join(__dir__, "support/**/*.rb")].each { |f| require f }

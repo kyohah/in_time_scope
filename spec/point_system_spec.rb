@@ -12,11 +12,6 @@ RSpec.describe "Point System Example" do
 
   let(:user) { User.create!(name: "test_user") }
 
-  before do
-    MemberPoint.delete_all
-    User.delete_all
-  end
-
   describe "MemberPoint with full time window pattern" do
     describe ".in_time" do
       it "returns only points within their validity period" do
