@@ -39,5 +39,9 @@ Layout/LineLength:
 Style/Documentation:
   Enabled: false
 
+Style/OneClassPerFile:
+  Exclude:
+    - "spec/support/create_test_database.rb"
+
 Gemspec/DevelopmentDependencies:
   EnforcedStyle: gemspec
