@@ -35,7 +35,7 @@ RSpec.describe "scope filter propagation in latest_in_time / earliest_in_time" d
         sql = VersionedRecord.approved.latest_in_time(:user_id).to_sql
         # The status = 1 condition should appear at least twice:
         # once in the outer WHERE and once inside NOT EXISTS
-        expect(sql.scan(/"status" = 1/).length).to be >= 2
+        expect(sql.scan('"status" = 1').length).to be >= 2
       end
     end
 
