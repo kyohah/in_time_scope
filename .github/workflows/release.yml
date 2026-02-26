@@ -24,10 +24,6 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2"
-          bundler-cache: true
-
-      - name: Build gem
-        run: bundle exec rake build
 
       - name: Publish to RubyGems
         uses: rubygems/release-gem@v1
