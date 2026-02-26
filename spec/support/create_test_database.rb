@@ -79,6 +79,15 @@ ActiveRecord::Schema.define version: 0 do
     t.datetime :end_at, null: false
     t.timestamps
   end
+
+  # Versioned records with status (for testing latest_in_time + scope chaining)
+  create_table :versioned_records, force: true do |t|
+    t.references :user, null: false
+    t.string :value, null: false
+    t.integer :status, null: false, default: 0 # 0=pending, 1=approved, 2=rejected
+    t.datetime :start_at, null: false
+    t.timestamps
+  end
 end
 
 # Basic nullable time window
@@ -158,6 +167,17 @@ class MemberPoint < ActiveRecord::Base
   scope :invalid, -> { out_of_time }
 end
 
+# Versioned record with status (for testing scope filter propagation into NOT EXISTS)
+class VersionedRecord < ActiveRecord::Base
+  include InTimeScope
+
+  belongs_to :user
+
+  in_time_scope start_at: { null: false }, end_at: { column: nil }
+
+  enum :status, { pending: 0, approved: 1, rejected: 2 }
+end
+
 # User for has_one association tests
 class User < ActiveRecord::Base
   has_many :prices
@@ -184,6 +204,16 @@ class User < ActiveRecord::Base
   has_one :current_name_history,
           -> { latest_in_time(:user_id) },
           class_name: "UserNameHistory"
+
+  # Latest approved versioned record (tests scope filter propagation)
+  has_one :current_approved_record,
+          -> { approved.latest_in_time(:user_id) },
+          class_name: "VersionedRecord"
+
+  # Earliest approved versioned record (tests scope filter propagation)
+  has_one :earliest_approved_record,
+          -> { approved.earliest_in_time(:user_id) },
+          class_name: "VersionedRecord"
 
   # Convenience method for current name
   def current_name

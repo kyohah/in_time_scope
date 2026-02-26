@@ -212,6 +212,23 @@ module InTimeScope
                                       .where(p2[column].gt(arel_table[column]))
                                       .where(p2[:id].not_eq(arel_table[:id]))
 
+        # Propagate simple equality conditions from the current scope into the NOT EXISTS
+        # subquery. This ensures that chained scopes like `.approved.latest_in_time(:user_id)`
+        # only consider approved records when searching for "a newer record exists",
+        # preventing a newer rejected record from shadowing the latest approved one.
+        where_values_hash.each do |col, val|
+          next if col.to_s == column.to_s      # time column already handled above
+          next if col.to_s == foreign_key.to_s # foreign key already handled above
+
+          subquery = if val.nil?
+                       subquery.where(p2[col].eq(nil))
+                     elsif val.is_a?(Array)
+                       subquery.where(p2[col].in(val))
+                     else
+                       subquery.where(p2[col].eq(val))
+                     end
+        end
+
         not_exists = Arel::Nodes::Not.new(Arel::Nodes::Exists.new(subquery.ast))
 
         where(column => ..time).where(not_exists)
@@ -243,6 +260,21 @@ module InTimeScope
                                       .where(p2[column].lteq(time))
                                       .where(p2[column].lt(arel_table[column]))
                                       .where(p2[:id].not_eq(arel_table[:id]))
+
+        # Propagate simple equality conditions from the current scope into the NOT EXISTS
+        # subquery (same reasoning as define_latest_one_scope).
+        where_values_hash.each do |col, val|
+          next if col.to_s == column.to_s
+          next if col.to_s == foreign_key.to_s
+
+          subquery = if val.nil?
+                       subquery.where(p2[col].eq(nil))
+                     elsif val.is_a?(Array)
+                       subquery.where(p2[col].in(val))
+                     else
+                       subquery.where(p2[col].eq(val))
+                     end
+        end
 
         not_exists = Arel::Nodes::Not.new(Arel::Nodes::Exists.new(subquery.ast))
 
