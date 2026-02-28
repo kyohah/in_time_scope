@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
 require "active_record"
-require_relative "in_time_scope/version"
-require_relative "in_time_scope/class_methods"
+require_relative "active_record_in_time_scope/version"
+require_relative "active_record_in_time_scope/class_methods"
 
-# InTimeScope provides time-window scopes for ActiveRecord models.
+# ActiveRecordInTimeScope provides time-window scopes for ActiveRecord models.
 #
 # It allows you to easily query records that fall within specific time periods,
 # with support for nullable columns, custom column names, and multiple scopes per model.
 #
-# InTimeScope is automatically included in ActiveRecord::Base, so you can use
+# ActiveRecordInTimeScope is automatically included in ActiveRecord::Base, so you can use
 # +in_time_scope+ directly in your models without explicit include.
 #
 # == Basic usage
@@ -109,8 +109,8 @@ require_relative "in_time_scope/class_methods"
 # - ConfigurationError: Raised at scope call time for invalid configurations
 #
 # @see ClassMethods#in_time_scope
-module InTimeScope
-  # Base error class for InTimeScope errors
+module ActiveRecordInTimeScope
+  # Base error class for ActiveRecordInTimeScope errors
   class Error < StandardError; end
 
   # Raised when a specified column does not exist on the table
@@ -128,5 +128,5 @@ module InTimeScope
 end
 
 ActiveSupport.on_load(:active_record) do
-  include InTimeScope
+  include ActiveRecordInTimeScope
 end

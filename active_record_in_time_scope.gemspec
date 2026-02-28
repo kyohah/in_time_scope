@@ -1,27 +1,26 @@
 # frozen_string_literal: true
 
-require_relative "lib/in_time_scope/version"
+require_relative "lib/active_record_in_time_scope/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "in_time_scope"
-  spec.version = InTimeScope::VERSION
+  spec.name = "active_record_in_time_scope"
+  spec.version = ActiveRecordInTimeScope::VERSION
   spec.authors = ["kyohah"]
   spec.email = ["3257272+kyohah@users.noreply.github.com"]
 
   spec.summary = "Add time-window scopes to ActiveRecord models"
-  spec.description = "InTimeScope provides time-window scopes for ActiveRecord models."
-  spec.homepage = "https://github.com/kyohah/in_time_scope"
+  spec.description = "ActiveRecordInTimeScope provides time-window scopes for ActiveRecord models."
+  spec.homepage = "https://github.com/kyohah/active_record_in_time_scope"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.0.0"
+  spec.required_ruby_version = ">= 4.0.0"
 
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/kyohah/in_time_scope"
-  spec.metadata["changelog_uri"] = "https://github.com/kyohah/in_time_scope/blob/main/CHANGELOG.md"
-  # Specify which files should be added to the gem when it is released.
-  # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
+  spec.metadata["source_code_uri"] = "https://github.com/kyohah/active_record_in_time_scope"
+  spec.metadata["changelog_uri"] = "https://github.com/kyohah/active_record_in_time_scope/blob/main/CHANGELOG.md"
+
   gemspec = File.basename(__FILE__)
   spec.files = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|
     ls.readlines("\x0", chomp: true).reject do |f|
