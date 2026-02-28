@@ -64,12 +64,17 @@ module ActiveRecordInTimeScope
       start_at_null = fetch_null_option(start_at, start_at_column, table_column_hash)
       end_at_null = fetch_null_option(end_at, end_at_column, table_column_hash)
 
+      start_at_no_future = start_at.fetch(:no_future, false)
+      end_at_no_future = end_at.fetch(:no_future, false)
+
       define_scope_methods(
         scope_name == :in_time ? "" : "_#{scope_name}",
         start_at_column: start_at_column,
         start_at_null: start_at_null,
+        start_at_no_future: start_at_no_future,
         end_at_column: end_at_column,
-        end_at_null: end_at_null
+        end_at_null: end_at_null,
+        end_at_no_future: end_at_no_future
       )
     end
 
@@ -122,7 +127,7 @@ module ActiveRecordInTimeScope
     # @param end_at_null [Boolean, nil] Whether end column allows NULL
     # @return [void]
     # @api private
-    def define_scope_methods(suffix, start_at_column:, start_at_null:, end_at_column:, end_at_null:)
+    def define_scope_methods(suffix, start_at_column:, start_at_null:, start_at_no_future: false, end_at_column:, end_at_null:, end_at_no_future: false) # rubocop:disable Metrics/ParameterLists
       # Define class-level scope and instance method
       if start_at_column.nil? && end_at_column.nil?
         define_error_scope_and_method(suffix,
@@ -134,10 +139,11 @@ module ActiveRecordInTimeScope
                                         "Start-only pattern requires non-nullable column. " \
                                         "Set `start_at: { null: false }` or add an end_at column")
         else
-          define_start_only_scope(suffix, start_at_column)
-          define_instance_method(suffix, start_at_column, start_at_null, end_at_column, end_at_null)
-          define_latest_one_scope(suffix, start_at_column)
-          define_earliest_one_scope(suffix, start_at_column)
+          define_start_only_scope(suffix, start_at_column, no_future: start_at_no_future)
+          define_instance_method(suffix, start_at_column, start_at_null, end_at_column, end_at_null,
+                                 start_no_future: start_at_no_future)
+          define_latest_one_scope(suffix, start_at_column, no_future: start_at_no_future)
+          define_earliest_one_scope(suffix, start_at_column, no_future: start_at_no_future)
           define_before_scope(suffix, start_at_column, start_at_null)
           define_after_scope(suffix, end_at_column, end_at_null)
           define_out_of_time_scope(suffix)
@@ -149,10 +155,11 @@ module ActiveRecordInTimeScope
                                         "End-only pattern requires non-nullable column. " \
                                         "Set `end_at: { null: false }` or add a start_at column")
         else
-          define_end_only_scope(suffix, end_at_column)
-          define_instance_method(suffix, start_at_column, start_at_null, end_at_column, end_at_null)
-          define_latest_one_scope(suffix, end_at_column)
-          define_earliest_one_scope(suffix, end_at_column)
+          define_end_only_scope(suffix, end_at_column, no_future: end_at_no_future)
+          define_instance_method(suffix, start_at_column, start_at_null, end_at_column, end_at_null,
+                                 end_no_future: end_at_no_future)
+          define_latest_one_scope(suffix, end_at_column, no_future: end_at_no_future)
+          define_earliest_one_scope(suffix, end_at_column, no_future: end_at_no_future)
           define_before_scope(suffix, start_at_column, start_at_null)
           define_after_scope(suffix, end_at_column, end_at_null)
           define_out_of_time_scope(suffix)
@@ -198,11 +205,17 @@ module ActiveRecordInTimeScope
     # @param column [Symbol] The start column name
     # @return [void]
     # @api private
-    def define_start_only_scope(suffix, column)
+    def define_start_only_scope(suffix, column, no_future: false)
       # Simple scope - WHERE only, no ORDER BY
       # Users can add .order(start_at: :desc) externally if needed
-      scope :"in_time#{suffix}", ->(time = Time.current) {
-        where(column => ..time)
+      # When no_future: true, calling without a time arg skips the WHERE condition entirely
+      # because the column is guaranteed to never hold a future value.
+      scope :"in_time#{suffix}", ->(time = nil) {
+        if time.nil? && no_future
+          all
+        else
+          where(column => ..(time || Time.current))
+        end
       }
     end
 
@@ -225,18 +238,25 @@ module ActiveRecordInTimeScope
     #   has_one :current_price, -> { latest_in_time(:user_id) }, class_name: 'Price'
     #
     # @api private
-    def define_latest_one_scope(suffix, column)
-      # NOT EXISTS approach: select records where no later record exists for the same foreign key
-      scope :"latest_in_time#{suffix}", ->(foreign_key, time = Time.current) {
+    def define_latest_one_scope(suffix, column, no_future: false)
+      # NOT EXISTS approach: select records where no later record exists for the same foreign key.
+      # When no_future: true and no time arg given, the time boundary conditions are omitted
+      # because the column is guaranteed to never hold a future value.
+      scope :"latest_in_time#{suffix}", ->(foreign_key, time = nil) {
+        use_no_future = no_future && time.nil?
+        resolved_time = time || Time.current
+
         p2 = arel_table.alias("p2")
 
         subquery = Arel::SelectManager.new(arel_table)
                                       .from(p2)
                                       .project(Arel.sql("1"))
                                       .where(p2[foreign_key].eq(arel_table[foreign_key]))
-                                      .where(p2[column].lteq(time))
-                                      .where(p2[column].gt(arel_table[column]))
-                                      .where(p2[:id].not_eq(arel_table[:id]))
+
+        subquery = subquery.where(p2[column].lteq(resolved_time)) unless use_no_future
+
+        subquery = subquery.where(p2[column].gt(arel_table[column]))
+                           .where(p2[:id].not_eq(arel_table[:id]))
 
         # Propagate simple equality conditions from the current scope into the NOT EXISTS
         # subquery. This ensures that chained scopes like `.approved.latest_in_time(:user_id)`
@@ -257,7 +277,11 @@ module ActiveRecordInTimeScope
 
         not_exists = Arel::Nodes::Not.new(Arel::Nodes::Exists.new(subquery.ast))
 
-        where(column => ..time).where(not_exists)
+        if use_no_future
+          where(not_exists)
+        else
+          where(column => ..resolved_time).where(not_exists)
+        end
       }
     end
 
@@ -280,18 +304,25 @@ module ActiveRecordInTimeScope
     #   has_one :first_price, -> { earliest_in_time(:user_id) }, class_name: 'Price'
     #
     # @api private
-    def define_earliest_one_scope(suffix, column)
-      # NOT EXISTS approach: select records where no earlier record exists for the same foreign key
-      scope :"earliest_in_time#{suffix}", ->(foreign_key, time = Time.current) {
+    def define_earliest_one_scope(suffix, column, no_future: false)
+      # NOT EXISTS approach: select records where no earlier record exists for the same foreign key.
+      # When no_future: true and no time arg given, the time boundary conditions are omitted
+      # because the column is guaranteed to never hold a future value.
+      scope :"earliest_in_time#{suffix}", ->(foreign_key, time = nil) {
+        use_no_future = no_future && time.nil?
+        resolved_time = time || Time.current
+
         p2 = arel_table.alias("p2")
 
         subquery = Arel::SelectManager.new(arel_table)
                                       .from(p2)
                                       .project(Arel.sql("1"))
                                       .where(p2[foreign_key].eq(arel_table[foreign_key]))
-                                      .where(p2[column].lteq(time))
-                                      .where(p2[column].lt(arel_table[column]))
-                                      .where(p2[:id].not_eq(arel_table[:id]))
+
+        subquery = subquery.where(p2[column].lteq(resolved_time)) unless use_no_future
+
+        subquery = subquery.where(p2[column].lt(arel_table[column]))
+                           .where(p2[:id].not_eq(arel_table[:id]))
 
         # Propagate simple equality conditions from the current scope into the NOT EXISTS
         # subquery (same reasoning as define_latest_one_scope).
@@ -310,7 +341,11 @@ module ActiveRecordInTimeScope
 
         not_exists = Arel::Nodes::Not.new(Arel::Nodes::Exists.new(subquery.ast))
 
-        where(column => ..time).where(not_exists)
+        if use_no_future
+          where(not_exists)
+        else
+          where(column => ..resolved_time).where(not_exists)
+        end
       }
     end
 
@@ -320,9 +355,15 @@ module ActiveRecordInTimeScope
     # @param column [Symbol] The end column name
     # @return [void]
     # @api private
-    def define_end_only_scope(suffix, column)
-      scope :"in_time#{suffix}", ->(time = Time.current) {
-        where.not(column => ..time)
+    def define_end_only_scope(suffix, column, no_future: false)
+      # When no_future: true, calling without a time arg skips the WHERE condition entirely
+      # because the column is guaranteed to never hold a future value.
+      scope :"in_time#{suffix}", ->(time = nil) {
+        if time.nil? && no_future
+          all
+        else
+          where.not(column => ..(time || Time.current))
+        end
       }
     end
 
@@ -366,22 +407,29 @@ module ActiveRecordInTimeScope
     # @param end_null [Boolean, nil] Whether end column allows NULL
     # @return [void]
     # @api private
-    def define_instance_method(suffix, start_column, start_null, end_column, end_null)
-      define_method("in_time#{suffix}?") do |time = Time.current|
+    def define_instance_method(suffix, start_column, start_null, end_column, end_null,
+                               start_no_future: false, end_no_future: false)
+      define_method("in_time#{suffix}?") do |time = nil|
+        resolved_time = time || Time.current
+
         start_ok = if start_column.nil?
                      true
+                   elsif time.nil? && start_no_future
+                     true
                    elsif start_null
-                     send(start_column).nil? || send(start_column) <= time
+                     send(start_column).nil? || send(start_column) <= resolved_time
                    else
-                     send(start_column) <= time
+                     send(start_column) <= resolved_time
                    end
 
         end_ok = if end_column.nil?
                    true
+                 elsif time.nil? && end_no_future
+                   true
                  elsif end_null
-                   send(end_column).nil? || send(end_column) > time
+                   send(end_column).nil? || send(end_column) > resolved_time
                  else
-                   send(end_column) > time
+                   send(end_column) > resolved_time
                  end
 
         start_ok && end_ok

@@ -136,6 +136,22 @@ class Price < ActiveRecord::Base
   in_time_scope start_at: { null: false }, end_at: { column: nil }
 end
 
+# Price with no_future: true (start_at is guaranteed to never be in the future)
+class PriceNoFuture < ActiveRecord::Base
+  self.table_name = "prices"
+
+  belongs_to :user
+
+  in_time_scope start_at: { null: false, no_future: true }, end_at: { column: nil }
+end
+
+# Coupon with no_future: true (expired_at is guaranteed to never be in the future)
+class CouponNoFuture < ActiveRecord::Base
+  self.table_name = "coupons"
+
+  in_time_scope start_at: { column: nil }, end_at: { column: :expired_at, null: false, no_future: true }
+end
+
 # User name history with start-only pattern
 class UserNameHistory < ActiveRecord::Base
 
@@ -194,6 +210,15 @@ class User < ActiveRecord::Base
   has_one :current_name_history,
           -> { latest_in_time(:user_id) },
           class_name: "UserNameHistory"
+
+  # no_future: true - simplified SQL (no time condition)
+  has_one :current_price_no_future,
+          -> { latest_in_time(:user_id) },
+          class_name: "PriceNoFuture"
+
+  has_one :earliest_price_no_future,
+          -> { earliest_in_time(:user_id) },
+          class_name: "PriceNoFuture"
 
   # Latest approved versioned record (tests scope filter propagation)
   has_one :current_approved_record,
