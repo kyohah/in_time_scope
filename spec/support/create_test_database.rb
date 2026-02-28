@@ -92,28 +92,24 @@ end
 
 # Basic nullable time window
 class Event < ActiveRecord::Base
-  include ActiveRecordInTimeScope
 
   in_time_scope
 end
 
 # Non-nullable time window
 class Campaign < ActiveRecord::Base
-  include ActiveRecordInTimeScope
 
   in_time_scope start_at: { null: false }, end_at: { null: false }
 end
 
 # Custom column names
 class Promotion < ActiveRecord::Base
-  include ActiveRecordInTimeScope
 
   in_time_scope start_at: { column: :available_at }, end_at: { column: :expired_at }
 end
 
 # Multiple scopes
 class Article < ActiveRecord::Base
-  include ActiveRecordInTimeScope
 
   in_time_scope
   # Uses published_start_at / published_end_at by default (prefix pattern)
@@ -122,21 +118,18 @@ end
 
 # Start-only pattern
 class History < ActiveRecord::Base
-  include ActiveRecordInTimeScope
 
   in_time_scope start_at: { null: false }, end_at: { column: nil }
 end
 
 # End-only pattern (requires non-nullable column)
 class Coupon < ActiveRecord::Base
-  include ActiveRecordInTimeScope
 
   in_time_scope start_at: { column: nil }, end_at: { column: :expired_at, null: false }
 end
 
 # Price with start-only pattern for has_one tests
 class Price < ActiveRecord::Base
-  include ActiveRecordInTimeScope
 
   belongs_to :user
 
@@ -145,7 +138,6 @@ end
 
 # User name history with start-only pattern
 class UserNameHistory < ActiveRecord::Base
-  include ActiveRecordInTimeScope
 
   belongs_to :user
 
@@ -154,7 +146,6 @@ end
 
 # Member points with expiration (full time window pattern)
 class MemberPoint < ActiveRecord::Base
-  include ActiveRecordInTimeScope
 
   belongs_to :user
 
@@ -169,7 +160,6 @@ end
 
 # Versioned record with status (for testing scope filter propagation into NOT EXISTS)
 class VersionedRecord < ActiveRecord::Base
-  include ActiveRecordInTimeScope
 
   belongs_to :user
 
