@@ -95,6 +95,20 @@ end
 
 For records where each row is valid until the next one:
 
+| id | user_id | amount | start_at   |
+|----|---------|--------|------------|
+| 1  | 1       | 100    | 2024-10-01 |
+| 2  | 1       | 120    | 2024-10-10 |
+| 3  | 1       | 150    | 2024-10-15 |
+
+```ruby
+# Time.current = 2024-10-20 → row id=3 (latest) is selected
+Price.in_time
+
+# 2024-10-12 → row id=2 (latest before 10/12) is selected
+Price.in_time(Time.parse("2024-10-12"))
+```
+
 ```ruby
 class Price < ActiveRecord::Base
   in_time_scope start_at: { null: false }, end_at: { column: nil }
@@ -108,9 +122,55 @@ end
 User.includes(:current_price)  # No N+1, fetches only latest per user
 ```
 
+**`latest_in_time` — latest record per FK before the given time:**
+
+```mermaid
+flowchart LR
+    A["id=1\n10/01"] --> B["id=2\n10/10"] --> C["id=3\n10/15"]
+    T(["⏱ time=10/20"]) -.->|latest_in_time| C
+```
+
+```
+──────●──────────●──────────●──────────▶ time
+    10/01      10/10      10/15    10/20(now)
+    id=1       id=2       id=3
+                             ↑
+                       latest_in_time
+```
+
+**`earliest_in_time` — earliest record per FK before the given time:**
+
+```mermaid
+flowchart LR
+    A["id=1\n10/01"] --> B["id=2\n10/10"] --> C["id=3\n10/15"]
+    T(["⏱ time=10/20"]) -.->|earliest_in_time| A
+```
+
+```
+──────●──────────●──────────●──────────▶ time
+    10/01      10/10      10/15    10/20(now)
+    id=1       id=2       id=3
+      ↑
+earliest_in_time
+```
+
 ### End-Only Pattern (Expiration)
 
 For records that are active until they expire:
+
+| id | code | expired_at |
+|----|------|------------|
+| 1  | ABC  | 2024-11-30 |
+| 2  | XYZ  | 2024-10-05 |
+| 3  | DEF  | 2024-12-31 |
+
+```ruby
+# Time.current = 2024-10-20 → id=1 (ABC) and id=3 (DEF) selected (not yet expired)
+Coupon.in_time
+
+# 2024-10-06 → id=1 (ABC) and id=3 (DEF) selected (XYZ expired on 10/05)
+Coupon.in_time(Time.parse("2024-10-06"))
+```
 
 ```ruby
 class Coupon < ActiveRecord::Base
@@ -119,6 +179,22 @@ end
 ```
 
 ### Inverse Scopes
+
+```mermaid
+flowchart LR
+    A["before_in_time"] -->|"● start_at"| B["in_time"] -->|"○ end_at"| C["after_in_time"]
+    D["out_of_time"] -->|"● start_at"| B
+    B -->|"○ end_at"| E["out_of_time"]
+```
+
+```
+before_in_time │       in_time       │ after_in_time
+───────────────●─────────────────────○──────────────▶ time
+             start_at             end_at
+
+   out_of_time │       in_time       │  out_of_time
+───────────────●─────────────────────○──────────────▶ time
+```
 
 Query records outside the time window:
 
