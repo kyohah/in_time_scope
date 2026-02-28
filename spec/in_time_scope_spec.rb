@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-RSpec.describe InTimeScope do
+RSpec.describe ActiveRecordInTimeScope do
   let(:now) { Time.local(2024, 6, 15, 12, 0, 0) }
   let(:past) { Time.local(2024, 6, 1, 0, 0, 0) }
   let(:future) { Time.local(2024, 6, 30, 23, 59, 59) }
@@ -374,11 +374,11 @@ RSpec.describe InTimeScope do
       expect do
         Class.new(ActiveRecord::Base) do
           self.table_name = "events"
-          include InTimeScope
+          include ActiveRecordInTimeScope
 
           in_time_scope :nonexistent
         end
-      end.to raise_error(InTimeScope::ColumnNotFoundError, /Column 'nonexistent_start_at' does not exist on table 'events'/)
+      end.to raise_error(ActiveRecordInTimeScope::ColumnNotFoundError, /Column 'nonexistent_start_at' does not exist on table 'events'/)
     end
   end
 

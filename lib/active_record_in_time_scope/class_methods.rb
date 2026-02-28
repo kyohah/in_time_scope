@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-module InTimeScope
-  # Class methods added to ActiveRecord models when InTimeScope is included
+module ActiveRecordInTimeScope
+  # Class methods added to ActiveRecord models when ActiveRecordInTimeScope is included
   module ClassMethods
     # Defines time-window scopes for the model.
     #
@@ -93,6 +93,26 @@ module InTimeScope
       column_info.null
     end
 
+    # Returns true when only the start column is configured (history tracking pattern)
+    #
+    # @param start_at_column [Symbol, nil] Start column name
+    # @param end_at_column [Symbol, nil] End column name
+    # @return [Boolean]
+    # @api private
+    def start_only_pattern?(start_at_column, end_at_column)
+      !start_at_column.nil? && end_at_column.nil?
+    end
+
+    # Returns true when only the end column is configured (expiration pattern)
+    #
+    # @param start_at_column [Symbol, nil] Start column name
+    # @param end_at_column [Symbol, nil] End column name
+    # @return [Boolean]
+    # @api private
+    def end_only_pattern?(start_at_column, end_at_column)
+      start_at_column.nil? && !end_at_column.nil?
+    end
+
     # Defines the appropriate scope methods based on configuration
     #
     # @param suffix [String] The suffix for method names ("" or "_#{scope_name}")
@@ -107,7 +127,7 @@ module InTimeScope
       if start_at_column.nil? && end_at_column.nil?
         define_error_scope_and_method(suffix,
                                       "At least one of start_at or end_at must be specified")
-      elsif end_at_column.nil?
+      elsif start_only_pattern?(start_at_column, end_at_column)
         # Start-only pattern (history tracking) - requires non-nullable column
         if start_at_null
           define_error_scope_and_method(suffix,
@@ -122,7 +142,7 @@ module InTimeScope
           define_after_scope(suffix, end_at_column, end_at_null)
           define_out_of_time_scope(suffix)
         end
-      elsif start_at_column.nil?
+      elsif end_only_pattern?(start_at_column, end_at_column)
         # End-only pattern (expiration) - requires non-nullable column
         if end_at_null
           define_error_scope_and_method(suffix,
@@ -163,11 +183,11 @@ module InTimeScope
 
       method_names.each do |method_name|
         scope method_name, ->(_time = Time.current) {
-          raise InTimeScope::ConfigurationError, message
+          raise ActiveRecordInTimeScope::ConfigurationError, message
         }
 
         define_method("#{method_name}?") do |_time = Time.current|
-          raise InTimeScope::ConfigurationError, message
+          raise ActiveRecordInTimeScope::ConfigurationError, message
         end
       end
     end

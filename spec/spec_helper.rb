@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "in_time_scope"
+require "active_record_in_time_scope"
 require "timecop"
 
 RSpec.configure do |config|
